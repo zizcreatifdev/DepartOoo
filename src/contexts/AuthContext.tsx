@@ -10,6 +10,7 @@ interface Profile {
   full_name: string;
   email: string;
   department_id: string | null;
+  is_first_login: boolean;
 }
 
 interface Department {

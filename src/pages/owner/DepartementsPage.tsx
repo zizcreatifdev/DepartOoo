@@ -4,7 +4,7 @@
  * Données réelles Supabase (table departments + profiles).
  */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -15,9 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   Building2, Search, GraduationCap, Users, CheckCircle2,
-  Clock, ChevronRight, CalendarDays,
+  Clock, ChevronRight, CalendarDays, UserPlus,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import CreateChefDialog from "@/components/owner/CreateChefDialog";
 
 // ── Types ────────────────────────────────────────────────────
 interface Departement {
@@ -102,8 +103,12 @@ function StatCard({ label, value, icon, color }: { label: string; value: number 
 
 // ── Page ─────────────────────────────────────────────────────
 const DepartementsPage = () => {
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"tous" | "actifs" | "en_cours">("tous");
+
+  // Créer chef
+  const [createChefDept, setCreateChefDept] = useState<{ id: string; name: string } | null>(null);
 
   const { data: depts = [], isLoading } = useQuery({
     queryKey: ["owner-departements"],
@@ -250,7 +255,20 @@ const DepartementsPage = () => {
                         </span>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!d.chef_name && d.onboarding_completed && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 gap-1"
+                          onClick={() => setCreateChefDept({ id: d.id, name: d.name })}
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          Créer chef
+                        </Button>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -264,6 +282,20 @@ const DepartementsPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog création chef */}
+      {createChefDept && (
+        <CreateChefDialog
+          open={!!createChefDept}
+          onOpenChange={(v) => { if (!v) setCreateChefDept(null); }}
+          departmentId={createChefDept.id}
+          departmentName={createChefDept.name}
+          onCreated={() => {
+            setCreateChefDept(null);
+            qc.invalidateQueries({ queryKey: ["owner-departements"] });
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 };

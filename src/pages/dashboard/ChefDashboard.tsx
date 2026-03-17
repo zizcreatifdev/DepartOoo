@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
+import FirstLoginModal from "@/components/chef/FirstLoginModal";
 import { useHasValidatedMaquette } from "@/hooks/useHasValidatedMaquette";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,10 +30,13 @@ const durationHours = (start: string, end: string) => {
 };
 
 const ChefDashboard = () => {
-  const { department } = useAuth();
+  const { department, profile, refreshProfile } = useAuth();
   const { hasValidated, loading: maqLoading } = useHasValidatedMaquette();
   const navigate = useNavigate();
   const academicYear = getCurrentAcademicYear();
+
+  // Premier login : afficher la modale de changement de MDP
+  const isFirstLogin = profile?.is_first_login === true;
 
   const [loading, setLoading] = useState(true);
   const [enseignants, setEnseignants] = useState<any[]>([]);
@@ -180,6 +184,13 @@ const ChefDashboard = () => {
   ];
 
   return (
+    <>
+      {/* Modale premier login */}
+      <FirstLoginModal
+        open={isFirstLogin}
+        onDone={() => refreshProfile()}
+      />
+
     <DashboardLayout title="Tableau de bord — Chef de département">
       <div className="space-y-6">
         {/* Header */}
@@ -351,6 +362,7 @@ const ChefDashboard = () => {
         </Card>
       </div>
     </DashboardLayout>
+    </>
   );
 };
 

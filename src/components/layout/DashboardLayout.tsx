@@ -33,6 +33,7 @@ import {
   ClipboardList,
   ChevronRight,
   CreditCard,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,13 +82,14 @@ const menuByRole: Record<string, MenuItem[]> = {
     { title: "Mes heures", url: "/dashboard/enseignant/heures", icon: Settings },
   ],
   owner: [
-    { title: "Tableau de bord",      url: "/dashboard/owner",              icon: LayoutDashboard },
-    { title: "Plans tarifaires",     url: "/dashboard/owner/plans",        icon: CreditCard },
-    { title: "Licences & Paiements", url: "/dashboard/owner/licences",     icon: CalendarDays },
-    { title: "Universités",          url: "/dashboard/owner/universites",  icon: GraduationCap },
-    { title: "Départements",         url: "/dashboard/owner/departements", icon: Building2 },
-    { title: "Utilisateurs",         url: "/dashboard/owner/utilisateurs", icon: Users },
-    { title: "Paramètres",           url: "/dashboard/owner/parametres",   icon: Settings },
+    { title: "Tableau de bord",      url: "/dashboard/owner",                icon: LayoutDashboard },
+    { title: "Plans tarifaires",     url: "/dashboard/owner/plans",          icon: CreditCard },
+    { title: "Licences & Paiements", url: "/dashboard/owner/licences",       icon: CalendarDays },
+    { title: "Comptabilité",         url: "/dashboard/owner/comptabilite",   icon: BarChart3 },
+    { title: "Universités",          url: "/dashboard/owner/universites",    icon: GraduationCap },
+    { title: "Départements",         url: "/dashboard/owner/departements",   icon: Building2 },
+    { title: "Utilisateurs",         url: "/dashboard/owner/utilisateurs",   icon: Users },
+    { title: "Paramètres",           url: "/dashboard/owner/parametres",     icon: Settings },
   ],
 };
 
