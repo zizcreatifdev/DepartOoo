@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAlertes } from "@/hooks/useAlertes";
 import AlertesBadge from "@/components/alertes/AlertesBadge";
 import AlertesPanel from "@/components/alertes/AlertesPanel";
+import NouveauClientWizard from "@/components/owner/NouveauClientWizard";
 import {
   SidebarProvider,
   Sidebar,
@@ -34,6 +35,7 @@ import {
   ChevronRight,
   CreditCard,
   BarChart3,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +112,7 @@ function SidebarNav() {
   const collapsed = state === "collapsed";
   const navigate = useNavigate();
   const items = menuByRole[role || "enseignant"] || [];
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -117,6 +120,7 @@ function SidebarNav() {
   };
 
   return (
+    <>
     <Sidebar collapsible="icon">
       <div className="p-4 flex items-center gap-3 border-b border-sidebar-border">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
@@ -124,6 +128,20 @@ function SidebarNav() {
         </div>
         {!collapsed && <span className="font-bold text-sidebar-foreground">Departo</span>}
       </div>
+
+      {/* Bouton Nouveau client — owner uniquement */}
+      {role === "owner" && (
+        <div className="px-3 pt-3 pb-1">
+          <Button
+            size="sm"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+            onClick={() => setWizardOpen(true)}
+          >
+            <UserPlus className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>Nouveau client</span>}
+          </Button>
+        </div>
+      )}
 
       <SidebarContent>
         <SidebarGroup>
@@ -170,6 +188,15 @@ function SidebarNav() {
         </Button>
       </div>
     </Sidebar>
+
+    {/* Wizard Nouveau client */}
+    {role === "owner" && (
+      <NouveauClientWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+      />
+    )}
+    </>
   );
 }
 
