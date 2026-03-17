@@ -1,10 +1,7 @@
 /**
  * create-chef/index.ts
  * Edge Function — réservée à l'owner.
- * Crée un compte chef de département avec :
- *   - Email au format <username>@departo.app
- *   - Mot de passe défini par l'owner
- *   - is_first_login = true
+ * Le chef est lié au département via profiles.department_id (pas de chef_id sur departments).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 
@@ -27,7 +24,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── 1. Auth header ────────────────────────────────────
+    // ── 1. Auth ───────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return jsonResponse({ error: "Non autorisé" }, 401);
 
@@ -42,11 +39,10 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    // ── 2. Vérifier l'identité de l'appelant ─────────────
     const { data: { user: caller } } = await supabaseUser.auth.getUser();
     if (!caller) return jsonResponse({ error: "Non autorisé" }, 401);
 
-    // ── 3. Vérifier que l'appelant est owner ──────────────
+    // ── 2. Vérifier rôle owner ────────────────────────────
     const { data: callerRoles } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -54,39 +50,28 @@ Deno.serve(async (req) => {
 
     const roles = (callerRoles ?? []).map((r: any) => r.role);
     if (!roles.includes("owner")) {
-      return jsonResponse(
-        { error: "Accès refusé — seul l'owner peut créer un chef de département." },
-        403,
-      );
+      return jsonResponse({ error: "Accès refusé — seul l'owner peut créer un chef." }, 403);
     }
 
-    // ── 4. Lire le body ───────────────────────────────────
+    // ── 3. Lire le body ───────────────────────────────────
     const { username, full_name, department_id, password } = await req.json();
 
     if (!username || !full_name || !department_id || !password) {
-      return jsonResponse(
-        { error: "Champs manquants : username, full_name, department_id, password requis." },
-        400,
-      );
+      return jsonResponse({ error: "Champs manquants : username, full_name, department_id, password." }, 400);
     }
-
     if (!/^[a-z0-9._-]+$/i.test(username)) {
-      return jsonResponse(
-        { error: "Username invalide (lettres, chiffres, . _ - uniquement)." },
-        400,
-      );
+      return jsonResponse({ error: "Username invalide (lettres, chiffres, . _ - uniquement)." }, 400);
     }
-
     if (password.length < 8) {
-      return jsonResponse({ error: "Le mot de passe doit faire au moins 8 caractères." }, 400);
+      return jsonResponse({ error: "Mot de passe trop court (8 caractères minimum)." }, 400);
     }
 
     const email = `${username.toLowerCase()}@departo.app`;
 
-    // ── 5. Vérifier que le département existe et n'a pas déjà un chef ──
+    // ── 4. Vérifier que le département existe ─────────────
     const { data: dept, error: deptErr } = await supabaseAdmin
       .from("departments")
-      .select("id, name, chef_id")
+      .select("id, name")
       .eq("id", department_id)
       .single();
 
@@ -94,14 +79,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Département introuvable." }, 404);
     }
 
-    if (dept.chef_id) {
-      return jsonResponse(
-        { error: "Ce département a déjà un chef. Supprimez l'existant avant d'en créer un nouveau." },
-        409,
-      );
+    // ── 5. Vérifier qu'il n'y a pas déjà un chef ─────────
+    // Le chef est identifié par : profile.department_id = department_id ET role = 'chef'
+    const { data: deptProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("department_id", department_id);
+
+    const deptProfileIds = (deptProfiles ?? []).map((p: any) => p.id);
+
+    if (deptProfileIds.length > 0) {
+      const { data: existingChefs } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "chef")
+        .in("user_id", deptProfileIds);
+
+      if ((existingChefs ?? []).length > 0) {
+        return jsonResponse({ error: "Ce département a déjà un chef." }, 409);
+      }
     }
 
-    // ── 6. Créer l'utilisateur Auth ───────────────────────
+    // ── 6. Créer le compte Auth ───────────────────────────
     const { data: newUserData, error: createErr } =
       await supabaseAdmin.auth.admin.createUser({
         email,
@@ -122,7 +121,7 @@ Deno.serve(async (req) => {
 
     const newUserId = newUserData.user.id;
 
-    // ── 7. Rôle chef ──────────────────────────────────────
+    // ── 7. Attribuer le rôle chef ─────────────────────────
     const { error: roleErr } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: newUserId, role: "chef" });
@@ -131,7 +130,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Erreur rôle : ${roleErr.message}` }, 500);
     }
 
-    // ── 8. Profil : rattacher au département ──────────────
+    // ── 8. Rattacher le profil au département ─────────────
     const { error: profileErr } = await supabaseAdmin
       .from("profiles")
       .update({ department_id, full_name, is_first_login: true })
@@ -140,12 +139,6 @@ Deno.serve(async (req) => {
     if (profileErr) {
       return jsonResponse({ error: `Erreur profil : ${profileErr.message}` }, 500);
     }
-
-    // ── 9. Mettre à jour departments.chef_id ─────────────
-    await supabaseAdmin
-      .from("departments")
-      .update({ chef_id: newUserId })
-      .eq("id", department_id);
 
     return jsonResponse({
       success: true,

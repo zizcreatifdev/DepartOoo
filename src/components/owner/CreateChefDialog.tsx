@@ -71,7 +71,11 @@ const CreateChefDialog = ({
         },
       });
 
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) {
+        // Extraire le vrai message depuis le contexte de l'erreur HTTP
+        const ctx = (res.error as any).context;
+        throw new Error(ctx?.error ?? res.data?.error ?? res.error.message);
+      }
       if (res.data?.error) throw new Error(res.data.error);
 
       toast.success(`Chef créé — ${email}`);
