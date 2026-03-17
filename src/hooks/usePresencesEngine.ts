@@ -25,7 +25,7 @@ export function usePresencesEngine() {
     } catch (err) {
       console.error('[presences engine] afterSaisiePresences:', err);
       // Non-bloquant : la présence est bien sauvée, seule la vérification a échoué
-      toast.error('Erreur lors de la vérification des seuils d'absences');
+      toast.error("Erreur lors de la vérification des seuils d'absences");
     } finally {
       setProcessing(false);
     }
