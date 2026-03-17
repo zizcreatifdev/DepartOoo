@@ -50,10 +50,7 @@ interface Departement {
 async function fetchDepartements(): Promise<Departement[]> {
   const { data: depts, error } = await (supabase as any)
     .from("departments")
-    .select(`
-      id, name, university, university_id, ufr, onboarding_completed, offre, created_at,
-      profiles!departments_chef_id_fkey (full_name, email)
-    `)
+    .select(`*, profiles!departments_chef_id_fkey (full_name, email)`)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
