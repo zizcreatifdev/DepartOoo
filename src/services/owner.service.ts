@@ -191,7 +191,7 @@ export async function getAdoptionParModule(): Promise<AdoptionModule[]> {
     { data: seanceDepts },
     { data: examenDepts },
     { data: docDepts },
-    { data: resultDepts },
+    { data: resultData },
   ] = await Promise.all([
     supabase
       .from('departments')
@@ -220,10 +220,21 @@ export async function getAdoptionParModule(): Promise<AdoptionModule[]> {
   const countUnique = (rows: any[] | null, key: string) =>
     new Set((rows ?? []).map((r: any) => r[key])).size;
 
+  // Pour les Notes : récupérer les department_id via les examens associés aux résultats
+  const examenIds = [...new Set((resultData ?? []).map((r: any) => r.examen_id))];
+  let notesDepts: any[] | null = [];
+  if (examenIds.length > 0) {
+    const { data } = await supabase
+      .from('examens')
+      .select('department_id')
+      .in('id', examenIds);
+    notesDepts = data;
+  }
+
   const modules: { name: string; count: number }[] = [
     { name: 'Emploi du temps', count: countUnique(seanceDepts, 'department_id') },
     { name: 'Examens',         count: countUnique(examenDepts, 'department_id') },
-    { name: 'Notes',           count: resultDepts?.length ? 1 : 0 },  // pas de dept_id direct
+    { name: 'Notes',           count: countUnique(notesDepts, 'department_id') },
     { name: 'Documents',       count: countUnique(docDepts, 'department_id') },
   ];
 

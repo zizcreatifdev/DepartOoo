@@ -14,8 +14,10 @@ import {
   ExternalLink, Mail, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const ParametresPage = () => {
+  const navigate = useNavigate();
   return (
     <DashboardLayout title="Paramètres">
       <div className="space-y-6 max-w-3xl">
@@ -67,6 +69,17 @@ const ParametresPage = () => {
             <CardDescription>Configuration des offres disponibles sur la plateforme.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => navigate("/dashboard/owner/plans")}
+              >
+                <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                Gérer les plans
+              </Button>
+            </div>
             {[
               {
                 name: "Starter",
