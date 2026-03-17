@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Plus, Trash2, Download, UserX, Users } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Upload, Plus, Trash2, Download, UserX, Users, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +45,8 @@ const StudentsList: React.FC<Props> = ({ students, allStudents, departmentId, gr
   const [filterGroup, setFilterGroup] = useState<string>("all");
   const [filterLevel, setFilterLevel] = useState<string>("all");
   const [showAbandoned, setShowAbandoned] = useState(false);
+  const [confirmAbandonId, setConfirmAbandonId] = useState<string | null>(null);
+  const [abandonSaving, setAbandonSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleAdd = async () => {
@@ -80,10 +82,17 @@ const StudentsList: React.FC<Props> = ({ students, allStudents, departmentId, gr
     onRefresh();
   };
 
-  const handleAbandon = async (id: string) => {
-    const { error } = await supabase.from("students").update({ is_active: false }).eq("id", id);
+  const handleAbandon = async () => {
+    if (!confirmAbandonId) return;
+    setAbandonSaving(true);
+    const { error } = await supabase
+      .from("students")
+      .update({ is_active: false, statut_exclusion: "abandonne" } as any)
+      .eq("id", confirmAbandonId);
+    setAbandonSaving(false);
     if (error) { toast.error("Erreur: " + error.message); return; }
     toast.success("Étudiant marqué comme abandonné");
+    setConfirmAbandonId(null);
     onRefresh();
   };
 
@@ -259,7 +268,7 @@ const StudentsList: React.FC<Props> = ({ students, allStudents, departmentId, gr
                   <TableCell>
                     <div className="flex gap-1">
                       {s.is_active && isChef && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" onClick={() => handleAbandon(s.id)} title="Marquer comme abandonné">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" onClick={() => setConfirmAbandonId(s.id)} title="Marquer comme abandonné">
                           <UserX className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -280,6 +289,30 @@ const StudentsList: React.FC<Props> = ({ students, allStudents, departmentId, gr
         </CardContent>
       </Card>
       <p className="text-xs text-muted-foreground">{filtered.length} étudiant(s) affiché(s) — {students.length} actifs, {allStudents.length - students.length} abandonné(s)</p>
+
+      {/* Dialog confirmation abandon */}
+      <Dialog open={!!confirmAbandonId} onOpenChange={open => { if (!open) setConfirmAbandonId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Confirmer l'abandon
+            </DialogTitle>
+            <DialogDescription>
+              Cet étudiant sera marqué comme <strong>abandonné</strong> et ne sera plus comptabilisé
+              dans les présences ni dans les résultats. Cette action peut être annulée en le réactivant.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAbandonId(null)} disabled={abandonSaving}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleAbandon} disabled={abandonSaving}>
+              {abandonSaving ? "..." : "Confirmer l'abandon"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

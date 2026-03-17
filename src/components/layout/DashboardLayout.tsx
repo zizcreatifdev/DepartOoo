@@ -1,6 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAlertes } from "@/hooks/useAlertes";
+import AlertesBadge from "@/components/alertes/AlertesBadge";
+import AlertesPanel from "@/components/alertes/AlertesPanel";
 import {
   SidebarProvider,
   Sidebar,
@@ -32,6 +35,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getUniversity, University } from "@/services/universities.service";
 
 interface MenuItem {
   title: string;
@@ -52,6 +56,7 @@ const menuByRole: Record<string, MenuItem[]> = {
     { title: "Notes", url: "/dashboard/chef/notes", icon: BookOpen },
     { title: "Documents", url: "/dashboard/chef/documents", icon: FileText },
     { title: "Salles", url: "/dashboard/chef/salles", icon: DoorOpen },
+    { title: "Équipe", url: "/dashboard/chef/equipe", icon: Users },
     { title: "Paramètres", url: "/dashboard/chef/parametres", icon: Settings },
   ],
   assistant: [
@@ -76,9 +81,10 @@ const menuByRole: Record<string, MenuItem[]> = {
   ],
   owner: [
     { title: "Tableau de bord", url: "/dashboard/owner", icon: LayoutDashboard },
-    { title: "Départements", url: "/dashboard/owner/departements", icon: Building2 },
-    { title: "Utilisateurs", url: "/dashboard/owner/utilisateurs", icon: Users },
-    { title: "Paramètres", url: "/dashboard/owner/parametres", icon: Settings },
+    { title: "Universités",     url: "/dashboard/owner/universites", icon: GraduationCap },
+    { title: "Départements",   url: "/dashboard/owner/departements", icon: Building2 },
+    { title: "Utilisateurs",   url: "/dashboard/owner/utilisateurs", icon: Users },
+    { title: "Paramètres",     url: "/dashboard/owner/parametres",   icon: Settings },
   ],
 };
 
@@ -168,9 +174,26 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title }) => {
-  const { role } = useAuth();
+  const { role, profile, department } = useAuth();
   const location = useLocation();
   const breadcrumbs = buildBreadcrumbs(location.pathname, role);
+
+  // Logo université
+  const [universityLogo, setUniversityLogo] = useState<string | null>(null);
+  useEffect(() => {
+    const uid = (department as any)?.university_id;
+    if (!uid) { setUniversityLogo(null); return; }
+    getUniversity(uid)
+      .then((u: University) => setUniversityLogo(u.logo_url))
+      .catch(() => setUniversityLogo(null));
+  }, [(department as any)?.university_id]);
+
+  // Alertes — visibles pour chef, assistant et owner
+  const showAlertes = role === "chef" || role === "assistant" || role === "owner";
+  const { alertes, nb_non_lues, marquerLue, marquerToutesLues } = useAlertes(
+    showAlertes ? profile?.department_id : null,
+  );
+  const [alertesPanelOpen, setAlertesPanelOpen] = useState(false);
 
   return (
     <SidebarProvider>
@@ -179,7 +202,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title }) =>
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 gap-4 shrink-0">
             <SidebarTrigger />
-            <div className="flex items-center gap-1 text-sm text-muted-foreground min-w-0">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground min-w-0 flex-1">
               {breadcrumbs.map((crumb, i) => (
                 <span key={i} className="flex items-center gap-1 min-w-0">
                   {i > 0 && <ChevronRight className="h-3 w-3 shrink-0" />}
@@ -189,10 +212,35 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title }) =>
                 </span>
               ))}
             </div>
+            {/* Logo université */}
+            {universityLogo && (
+              <img
+                src={universityLogo}
+                alt="Logo université"
+                className="h-8 w-8 rounded object-contain shrink-0"
+              />
+            )}
+            {showAlertes && (
+              <AlertesBadge
+                nb_non_lues={nb_non_lues}
+                onClick={() => setAlertesPanelOpen(true)}
+              />
+            )}
           </header>
           <main className="flex-1 p-4 sm:p-6 overflow-auto">{children}</main>
         </div>
       </div>
+
+      {showAlertes && (
+        <AlertesPanel
+          open={alertesPanelOpen}
+          onClose={() => setAlertesPanelOpen(false)}
+          alertes={alertes}
+          nb_non_lues={nb_non_lues}
+          onMarquerLue={marquerLue}
+          onMarquerToutesLues={marquerToutesLues}
+        />
+      )}
     </SidebarProvider>
   );
 };

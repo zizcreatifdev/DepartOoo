@@ -39,7 +39,7 @@ interface Props {
   perturbation: Perturbation | null;
   levels: string[];
   groups: string[];
-  onSuccess: () => void;
+  onSuccess: (created?: Perturbation) => void;
 }
 
 const PerturbationFormDialog: React.FC<Props> = ({
@@ -103,15 +103,27 @@ const PerturbationFormDialog: React.FC<Props> = ({
       notes: notes || null,
     };
 
-    const { error } = perturbation
-      ? await supabase.from("perturbations").update(payload).eq("id", perturbation.id)
-      : await supabase.from("perturbations").insert({ ...payload, created_by: (await supabase.auth.getUser()).data.user?.id });
+    let createdPerturbation: Perturbation | undefined;
 
-    setSaving(false);
-    if (error) { toast.error("Erreur: " + error.message); return; }
+    if (perturbation) {
+      const { error } = await supabase.from("perturbations").update(payload).eq("id", perturbation.id);
+      setSaving(false);
+      if (error) { toast.error("Erreur: " + error.message); return; }
+    } else {
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const { data, error } = await supabase
+        .from("perturbations")
+        .insert({ ...payload, created_by: userId })
+        .select()
+        .single();
+      setSaving(false);
+      if (error) { toast.error("Erreur: " + error.message); return; }
+      createdPerturbation = data as Perturbation;
+    }
+
     toast.success(perturbation ? "Perturbation modifiée" : "Perturbation déclarée");
     onOpenChange(false);
-    onSuccess();
+    onSuccess(createdPerturbation);
   };
 
   return (

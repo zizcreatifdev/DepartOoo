@@ -15,6 +15,11 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import ImportWizard from "@/components/notes/ImportWizard";
+import ResultatsPromotion from "@/components/notes/ResultatsPromotion";
+import ReglesCalculForm from "@/components/notes/ReglesCalculForm";
+import { calculerResultatsPromotion, type ResultatsPromotion as IResultatsPromotion } from "@/engine/calcul-notes.engine";
+import { Calculator, Loader2 as Spinner } from "lucide-react";
 
 const getCurrentAcademicYear = (): string => {
   const now = new Date();
@@ -44,9 +49,13 @@ const NotesPage = () => {
   const [selectedSession, setSelectedSession] = useState<string>("normale");
   const [levels, setLevels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importData, setImportData] = useState<any[] | null>(null);
-  const [importUeId, setImportUeId] = useState("");
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // États calcul de résultats
+  const [resultatsData, setResultatsData] = useState<IResultatsPromotion | null>(null);
+  const [calculatingResultats, setCalculatingResultats] = useState(false);
+  const [selectedMaquetteId, setSelectedMaquetteId] = useState<string>("");
 
   const fetchData = async () => {
     if (!department) return;
@@ -125,75 +134,8 @@ const NotesPage = () => {
     return { label: "Ajourné", variant: "destructive" };
   };
 
-  // Import Excel
-  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Import wizard callbacks (ancien code supprimé, remplacé par ImportWizard)
 
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data);
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: null });
-
-    if (rows.length === 0) { toast.error("Fichier vide"); return; }
-
-    // Auto-detect columns
-    const headers = Object.keys(rows[0]);
-    const numCol = headers.find(h => /numero|matricule|num/i.test(h));
-    const noteCol = headers.find(h => /note|score|mark/i.test(h));
-
-    if (!numCol || !noteCol) {
-      toast.error("Colonnes 'numéro' et 'note' introuvables dans le fichier");
-      return;
-    }
-
-    const parsed = rows.map(r => ({
-      student_number: String(r[numCol]).trim(),
-      note: r[noteCol] !== null && r[noteCol] !== "" ? Number(r[noteCol]) : null,
-    })).filter(r => r.student_number);
-
-    setImportData(parsed);
-    toast.info(`${parsed.length} lignes détectées. Sélectionnez l'UE puis confirmez.`);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const confirmImport = async () => {
-    if (!importData || !importUeId || !department) return;
-
-    const inserts = importData.map(row => {
-      const student = students.find(s => s.student_number === row.student_number);
-      if (!student) return null;
-      return {
-        department_id: department.id,
-        student_id: student.id,
-        ue_id: importUeId,
-        note: row.note,
-        session_type: selectedSession,
-        academic_year: academicYear,
-        created_by: user?.id || null,
-      };
-    }).filter(Boolean);
-
-    if (inserts.length === 0) {
-      toast.error("Aucun étudiant correspondant trouvé");
-      return;
-    }
-
-    // Upsert notes
-    const { error } = await supabase.from("notes").upsert(inserts as any[], {
-      onConflict: "department_id,student_id,ue_id,session_type,academic_year",
-    });
-
-    if (error) {
-      toast.error("Erreur import: " + error.message);
-      return;
-    }
-
-    toast.success(`${inserts.length} notes importées`);
-    setImportData(null);
-    setImportUeId("");
-    fetchData();
-  };
 
   // Export PDF
   const exportPDF = () => {
@@ -265,10 +207,10 @@ const NotesPage = () => {
             </div>
             {canEdit && (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-1" /> Importer Excel
+                <Button variant="outline" size="sm" onClick={() => setShowImportWizard(v => !v)}>
+                  <Upload className="h-4 w-4 mr-1" />
+                  {showImportWizard ? "Fermer l'import" : "Importer Excel"}
                 </Button>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportExcel} />
                 <Button variant="outline" size="sm" onClick={exportPDF}>
                   <Download className="h-4 w-4 mr-1" /> Exporter PDF
                 </Button>
@@ -276,38 +218,29 @@ const NotesPage = () => {
             )}
           </div>
 
-          {/* Import confirmation */}
-          {importData && (
+          {/* Import Wizard */}
+          {showImportWizard && department && (
             <Card className="border-primary">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4" />
-                  {importData.length} lignes détectées — Sélectionnez l'UE cible
+                  Import intelligent de notes
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <Label className="text-xs">UE cible</Label>
-                    <Select value={importUeId} onValueChange={setImportUeId}>
-                      <SelectTrigger><SelectValue placeholder="Sélectionner l'UE" /></SelectTrigger>
-                      <SelectContent>
-                        {filteredUes.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button size="sm" onClick={confirmImport} disabled={!importUeId}>Confirmer l'import</Button>
-                  <Button variant="outline" size="sm" onClick={() => setImportData(null)}>Annuler</Button>
-                </div>
-                <div className="max-h-32 overflow-y-auto text-xs border rounded p-2">
-                  {importData.slice(0, 10).map((r, i) => (
-                    <div key={i} className="flex gap-4">
-                      <span className="font-mono">{r.student_number}</span>
-                      <span>{r.note !== null ? r.note : "—"}</span>
-                    </div>
-                  ))}
-                  {importData.length > 10 && <p className="text-muted-foreground mt-1">... et {importData.length - 10} autres</p>}
-                </div>
+              <CardContent>
+                <ImportWizard
+                  ues={filteredUes.map(u => ({ id: u.id, name: u.name }))}
+                  students={students.map(s => ({
+                    id: s.id,
+                    first_name: s.first_name,
+                    last_name: s.last_name,
+                    student_number: s.student_number,
+                  }))}
+                  departmentId={department.id}
+                  academicYear={academicYear}
+                  sessionType={selectedSession}
+                  onSuccess={() => { setShowImportWizard(false); fetchData(); }}
+                />
               </CardContent>
             </Card>
           )}
@@ -384,71 +317,85 @@ const NotesPage = () => {
         </TabsContent>
 
         <TabsContent value="resultats" className="space-y-4">
-          {/* Stats cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-emerald-600">{stats.admis}</p>
-                <p className="text-xs text-muted-foreground">Admis</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-amber-600">{stats.compenses}</p>
-                <p className="text-xs text-muted-foreground">Compensés</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-destructive">{stats.ajournes}</p>
-                <p className="text-xs text-muted-foreground">Ajournés</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total étudiants</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {stats.total > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Taux de réussite</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="w-full bg-muted rounded-full h-6 overflow-hidden flex">
-                  {stats.admis > 0 && (
-                    <div className="bg-emerald-500 h-full flex items-center justify-center text-[10px] text-white font-medium"
-                      style={{ width: `${(stats.admis / stats.total) * 100}%` }}>
-                      {Math.round((stats.admis / stats.total) * 100)}%
-                    </div>
-                  )}
-                  {stats.compenses > 0 && (
-                    <div className="bg-amber-500 h-full flex items-center justify-center text-[10px] text-white font-medium"
-                      style={{ width: `${(stats.compenses / stats.total) * 100}%` }}>
-                      {Math.round((stats.compenses / stats.total) * 100)}%
-                    </div>
-                  )}
-                  {stats.ajournes > 0 && (
-                    <div className="bg-destructive h-full flex items-center justify-center text-[10px] text-white font-medium"
-                      style={{ width: `${(stats.ajournes / stats.total) * 100}%` }}>
-                      {Math.round((stats.ajournes / stats.total) * 100)}%
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-4 mt-2 text-xs">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Admis</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Compensés</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-destructive" /> Ajournés</span>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Règles de calcul (chef uniquement) */}
+          {role === "chef" && department && (
+            <ReglesCalculForm
+              departmentId={department.id}
+              config={config}
+              onSaved={updated => setConfig(updated)}
+            />
           )}
 
+          {/* Sélecteur maquette + bouton calcul */}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[200px] space-y-1">
+                  <Label className="text-xs">Maquette (UE groupées)</Label>
+                  <Select value={selectedMaquetteId} onValueChange={setSelectedMaquetteId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choisir une maquette" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[...new Map(ues.map(u => [u.maquette_id, u])).values()].map(u => (
+                        <SelectItem key={u.maquette_id} value={u.maquette_id}>
+                          {u.level} – {u.semestre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 min-w-[140px]">
+                  <Label className="text-xs">Session</Label>
+                  <Select value={selectedSession} onValueChange={setSelectedSession}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normale">Normale</SelectItem>
+                      <SelectItem value="rattrapage">Rattrapage</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!selectedMaquetteId || calculatingResultats || !department}
+                  onClick={async () => {
+                    if (!selectedMaquetteId || !department) return;
+                    setCalculatingResultats(true);
+                    try {
+                      const res = await calculerResultatsPromotion(
+                        department.id,
+                        selectedMaquetteId,
+                        selectedSession,
+                        academicYear,
+                      );
+                      setResultatsData(res);
+                    } catch (err) {
+                      toast.error("Erreur calcul : " + (err instanceof Error ? err.message : String(err)));
+                    } finally {
+                      setCalculatingResultats(false);
+                    }
+                  }}
+                >
+                  {calculatingResultats
+                    ? <><Spinner className="h-4 w-4 animate-spin mr-2" />Calcul…</>
+                    : <><Calculator className="h-4 w-4 mr-2" />Calculer les résultats</>
+                  }
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Résultats calculés */}
+          {resultatsData && (
+            <ResultatsPromotion
+              resultats={resultatsData}
+              sessionLabel={selectedSession === "normale" ? "Session normale" : "Session de rattrapage"}
+            />
+          )}
+
+          {/* Export PDF (inchangé) */}
           <div className="flex justify-end">
-            <Button size="sm" onClick={exportPDF}>
+            <Button size="sm" variant="outline" onClick={exportPDF}>
               <Download className="h-4 w-4 mr-1" /> Exporter le relevé PDF
             </Button>
           </div>

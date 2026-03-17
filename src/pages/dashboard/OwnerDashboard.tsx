@@ -1,190 +1,276 @@
-import { useMemo } from "react";
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { useQuery } from '@tanstack/react-query';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge }    from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PipelineTable } from '@/components/owner/PipelineTable';
 import {
-  DollarSign, TrendingUp, Users, Building2, AlertTriangle,
-  CreditCard, ChevronRight, BarChart3, Activity, MapPin,
-  CalendarClock, FileText, ClipboardList, CalendarDays, Zap, ShieldAlert
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+  Users, Building2, AlertTriangle, CreditCard, ChevronRight,
+  BarChart3, Activity, CalendarClock, FileText, CalendarDays,
+  Zap, ShieldAlert, TrendingUp, LayoutGrid,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar, Legend,
-} from "recharts";
+  PieChart, Pie, Cell, BarChart, Bar,
+} from 'recharts';
+import {
+  getStatsGlobales, getDepartementsInactifs, getAdoptionParModule,
+  getPipelineCommercial, getAlertesOwner, getEvolutionInscriptions,
+} from '@/services/owner.service';
 
-// ── Mock data (à remplacer par de vraies données backend) ──
-
-const mrrData = [
-  { month: "Sep", mrr: 12000 }, { month: "Oct", mrr: 14500 }, { month: "Nov", mrr: 16200 },
-  { month: "Dec", mrr: 17800 }, { month: "Jan", mrr: 19500 }, { month: "Fév", mrr: 21300 },
-  { month: "Mar", mrr: 23100 },
-];
-
+// ── Données financières — à connecter à un système de paiement ──
 const planDistribution = [
-  { name: "Starter", value: 18, color: "hsl(var(--chart-1))" },
-  { name: "Pro", value: 42, color: "hsl(var(--chart-2))" },
-  { name: "Université", value: 12, color: "hsl(var(--chart-3))" },
+  { name: 'Starter',     value: 18, color: 'hsl(var(--chart-1))' },
+  { name: 'Pro',         value: 42, color: 'hsl(var(--chart-2))' },
+  { name: 'Université',  value: 12, color: 'hsl(var(--chart-3))' },
 ];
-
-const moduleUsage = [
-  { name: "Emploi du temps", count: 342 },
-  { name: "Présences", count: 289 },
-  { name: "Notes", count: 198 },
-  { name: "Examens", count: 156 },
-  { name: "Perturbations", count: 87 },
-  { name: "Documents", count: 64 },
-];
-
 const expiringLicenses = [
-  { dept: "Info — Univ. Yaoundé I", plan: "Pro", daysLeft: 12 },
-  { dept: "Maths — Univ. Douala", plan: "Starter", daysLeft: 28 },
-  { dept: "Physique — Univ. Dschang", plan: "Pro", daysLeft: 45 },
-  { dept: "Chimie — Univ. Maroua", plan: "Université", daysLeft: 72 },
+  { dept: 'Info — Univ. Yaoundé I',      plan: 'Pro',         daysLeft: 12 },
+  { dept: 'Maths — Univ. Douala',        plan: 'Starter',     daysLeft: 28 },
+  { dept: 'Physique — Univ. Dschang',    plan: 'Pro',         daysLeft: 45 },
+  { dept: 'Chimie — Univ. Maroua',       plan: 'Université',  daysLeft: 72 },
 ];
-
 const latePayments = [
-  { dept: "Génie Civil — Univ. Ngaoundéré", amount: 150000, daysPast: 15 },
-  { dept: "SVT — Univ. Bamenda", amount: 75000, daysPast: 7 },
+  { dept: 'Génie Civil — Univ. Ngaoundéré', amount: 150_000, daysPast: 15 },
+  { dept: 'SVT — Univ. Bamenda',             amount:  75_000, daysPast:  7 },
 ];
 
-const pipeline = [
-  { stage: "En discussion", count: 8, color: "hsl(var(--chart-4))" },
-  { stage: "En démo", count: 5, color: "hsl(var(--chart-1))" },
-  { stage: "En essai", count: 12, color: "hsl(var(--chart-2))" },
-  { stage: "Convertis", count: 3, color: "hsl(var(--chart-3))" },
-];
+// ── Helpers ──
+function StatSkeleton() {
+  return (
+    <Card>
+      <CardHeader className="pb-1"><Skeleton className="h-4 w-24" /></CardHeader>
+      <CardContent><Skeleton className="h-8 w-16 mt-1" /><Skeleton className="h-3 w-32 mt-2" /></CardContent>
+    </Card>
+  );
+}
 
-const inactiveDepts = [
-  { name: "Lettres — Univ. Buea", lastActive: "11 Fév 2026", days: 20 },
-  { name: "Histoire — Univ. Ebolowa", lastActive: "3 Fév 2026", days: 28 },
-  { name: "Philosophie — Univ. Bertoua", lastActive: "25 Jan 2026", days: 37 },
-];
-
-const alerts = [
-  { text: "2 licences expirent dans moins de 15 jours sans renouvellement", severity: "destructive" as const, icon: <CreditCard className="h-4 w-4" /> },
-  { text: "3 départements inactifs depuis plus de 21 jours", severity: "warning" as const, icon: <ShieldAlert className="h-4 w-4" /> },
-  { text: "2 paiements en retard pour un total de 225 000 FCFA", severity: "destructive" as const, icon: <AlertTriangle className="h-4 w-4" /> },
-  { text: "1 département bloqué à l'étape d'onboarding", severity: "info" as const, icon: <Zap className="h-4 w-4" /> },
-];
-
-const adoptionRates = [
-  { module: "Référentiel", rate: 95 },
-  { module: "Emploi du temps", rate: 88 },
-  { module: "Présences", rate: 72 },
-  { module: "Enseignants", rate: 85 },
-  { module: "Examens", rate: 61 },
-  { module: "Notes", rate: 45 },
-  { module: "Documents", rate: 38 },
-];
+// ============================================================
+// Dashboard
+// ============================================================
 
 const OwnerDashboard = () => {
-  const arrTotal = 23100 * 12;
+
+  // ---- Requêtes TanStack Query ----
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['owner-stats'],
+    queryFn:  getStatsGlobales,
+    staleTime: 60_000,
+  });
+
+  const { data: inactifs = [], isLoading: loadingInactifs } = useQuery({
+    queryKey: ['owner-inactifs'],
+    queryFn:  () => getDepartementsInactifs(21),
+    staleTime: 60_000,
+  });
+
+  const { data: adoption = [], isLoading: loadingAdoption } = useQuery({
+    queryKey: ['owner-adoption'],
+    queryFn:  getAdoptionParModule,
+    staleTime: 60_000,
+  });
+
+  const { data: pipeline = [], isLoading: loadingPipeline } = useQuery({
+    queryKey: ['owner-pipeline'],
+    queryFn:  getPipelineCommercial,
+    staleTime: 30_000,
+  });
+
+  const { data: alertesOwner = [] } = useQuery({
+    queryKey: ['owner-alertes'],
+    queryFn:  getAlertesOwner,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data: evolution = [] } = useQuery({
+    queryKey: ['owner-evolution'],
+    queryFn:  getEvolutionInscriptions,
+    staleTime: 300_000,
+  });
+
+  // ---- Calculs pipeline ----
+  const pipelineStats = {
+    discussion: pipeline.filter(p => p.statut === 'discussion').length,
+    demo:       pipeline.filter(p => p.statut === 'demo').length,
+    essai:      pipeline.filter(p => p.statut === 'essai').length,
+    converti:   pipeline.filter(p => p.statut === 'converti').length,
+  };
   const totalLicenses = planDistribution.reduce((s, p) => s + p.value, 0);
-  const conversionRate = Math.round((3 / 12) * 100);
 
   return (
     <DashboardLayout title="Administration — Departo">
       <div className="space-y-6">
-        {/* ── Alertes intelligentes ── */}
-        <Card className="border-destructive/20 bg-destructive/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              Alertes intelligentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {alerts.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-background/80">
-                <span className={
-                  a.severity === "destructive" ? "text-destructive" :
-                  a.severity === "warning" ? "text-orange-500" : "text-blue-500"
-                }>{a.icon}</span>
-                <span className="flex-1 text-sm text-foreground">{a.text}</span>
+
+        {/* ══════════ ALERTES ══════════ */}
+        {alertesOwner.length > 0 && (
+          <Card className="border-destructive/20 bg-destructive/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Alertes intelligentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {alertesOwner.map((a, i) => (
+                <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-background/80">
+                  <span className={
+                    a.severity === 'destructive' ? 'text-destructive' :
+                    a.severity === 'warning'     ? 'text-orange-500'  : 'text-blue-500'
+                  }>
+                    {a.severity === 'info' ? <Zap className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                  </span>
+                  <span className="flex-1 text-sm text-foreground">{a.text}</span>
+                  <Button variant="ghost" size="sm">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {/* Alertes financières statiques */}
+              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-background/80">
+                <CreditCard className="h-4 w-4 text-destructive" />
+                <span className="flex-1 text-sm text-foreground">
+                  {expiringLicenses.filter(l => l.daysLeft <= 30).length} licence(s) expirent dans moins de 30 jours
+                </span>
                 <Button variant="ghost" size="sm"><ChevronRight className="h-4 w-4" /></Button>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* ══════════ SECTION REVENUS ══════════ */}
+        {/* ══════════ STATS GLOBALES ══════════ */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <DollarSign className="h-5 w-5" /> Revenus
+            <LayoutGrid className="h-5 w-5" /> Vue d'ensemble
           </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {loadingStats ? (
+              <>{[0,1,2,3].map(i => <StatSkeleton key={i} />)}</>
+            ) : (
+              <>
+                <Card className="bg-primary/5 border-primary/20">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5" /> Départements actifs
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-primary">
+                      {stats?.nb_departements_actifs ?? '—'}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Onboarding complété</p>
+                  </CardContent>
+                </Card>
 
-          {/* KPI row */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-            <Card className="bg-primary/5 border-primary/20">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-medium text-muted-foreground">ARR Total</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-primary">{(arrTotal).toLocaleString("fr-FR")} FCFA</div>
-                <p className="text-xs text-muted-foreground mt-1">Revenu annuel récurrent</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">MRR</CardTitle></CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">23 100 FCFA</div>
-                <p className="text-xs text-green-600">+9.2% vs mois précédent</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Licences actives</CardTitle></CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{totalLicenses}</div>
-                <p className="text-xs text-muted-foreground">départements abonnés</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Paiements en retard</CardTitle></CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{latePayments.length}</div>
-                <p className="text-xs text-muted-foreground">225 000 FCFA en souffrance</p>
-              </CardContent>
-            </Card>
+                <Card>
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" /> Enseignants actifs
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-foreground">
+                      {stats?.nb_enseignants_total ?? '—'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Tous départements</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <CalendarDays className="h-3.5 w-3.5" /> Séances ce mois
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-foreground">
+                      {stats?.nb_seances_ce_mois ?? '—'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Créées ce mois-ci</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5" /> Documents générés
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-foreground">
+                      {stats?.nb_documents_generes ?? '—'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Ce mois-ci</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
+        </div>
 
+        {/* ══════════ REVENUS (données statiques — à connecter) ══════════ */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" /> Revenus
+            <Badge variant="outline" className="text-xs font-normal ml-1">Données de démo</Badge>
+          </h3>
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* MRR Line Chart */}
+            {/* Évolution inscriptions (real data) */}
             <Card>
-              <CardHeader><CardTitle className="text-base">Évolution du MRR</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Évolution des inscriptions</CardTitle>
+                <CardDescription>Nouveaux départements par mois</CardDescription>
+              </CardHeader>
               <CardContent className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={mrrData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="month" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                    <Line type="monotone" dataKey="mrr" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+                {evolution.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                    Aucune donnée disponible
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={evolution}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                        formatter={(v: number) => [v, 'Nouveaux depts']}
+                      />
+                      <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
-            {/* Pie Chart */}
+            {/* Répartition par offre */}
             <Card>
-              <CardHeader><CardTitle className="text-base">Répartition par offre</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Répartition par offre</CardTitle>
+                <CardDescription>Total : {totalLicenses} licences actives</CardDescription>
+              </CardHeader>
               <CardContent className="h-64 flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={planDistribution} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" label={({ name, value }) => `${name} (${value})`}>
+                    <Pie
+                      data={planDistribution} cx="50%" cy="50%"
+                      innerRadius={50} outerRadius={80} dataKey="value"
+                      label={({ name, value }) => `${name} (${value})`}
+                    >
                       {planDistribution.map((entry, index) => (
                         <Cell key={index} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
 
-          {/* Expiring licenses & late payments */}
+          {/* Licences + Paiements */}
           <div className="grid gap-4 lg:grid-cols-2 mt-4">
             <Card>
               <CardHeader><CardTitle className="text-base">Licences expirant bientôt</CardTitle></CardHeader>
@@ -193,10 +279,10 @@ const OwnerDashboard = () => {
                   <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
                     <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{l.dept}</p>
+                      <p className="text-sm font-medium truncate">{l.dept}</p>
                       <p className="text-xs text-muted-foreground">{l.plan}</p>
                     </div>
-                    <Badge variant={l.daysLeft <= 30 ? "destructive" : l.daysLeft <= 60 ? "secondary" : "outline"}>
+                    <Badge variant={l.daysLeft <= 30 ? 'destructive' : l.daysLeft <= 60 ? 'secondary' : 'outline'}>
                       {l.daysLeft}j
                     </Badge>
                   </div>
@@ -212,8 +298,10 @@ const OwnerDashboard = () => {
                   <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5">
                     <CreditCard className="h-4 w-4 text-destructive shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{p.dept}</p>
-                      <p className="text-xs text-destructive">{p.amount.toLocaleString("fr-FR")} FCFA · {p.daysPast} jours de retard</p>
+                      <p className="text-sm font-medium truncate">{p.dept}</p>
+                      <p className="text-xs text-destructive">
+                        {p.amount.toLocaleString('fr-FR')} FCFA · {p.daysPast} jours de retard
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -222,96 +310,99 @@ const OwnerDashboard = () => {
           </div>
         </div>
 
-        {/* ══════════ SECTION ACQUISITION ══════════ */}
+        {/* ══════════ ACQUISITION — PIPELINE ══════════ */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <TrendingUp className="h-5 w-5" /> Acquisition
           </h3>
+
+          {/* KPIs pipeline */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-            {pipeline.map((p) => (
-              <Card key={p.stage}>
+            {([
+              { label: 'En discussion', value: pipelineStats.discussion, color: 'bg-amber-400' },
+              { label: 'En démo',       value: pipelineStats.demo,       color: 'bg-blue-400' },
+              { label: 'En essai',      value: pipelineStats.essai,      color: 'bg-purple-400' },
+              { label: 'Convertis',     value: pipelineStats.converti,   color: 'bg-emerald-400' },
+            ] as const).map(p => (
+              <Card key={p.label}>
                 <CardHeader className="pb-1">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{p.stage}</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">{p.label}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{p.count}</div>
-                  <div className="h-1.5 rounded-full mt-2" style={{ backgroundColor: p.color, opacity: 0.3 }}>
-                    <div className="h-full rounded-full" style={{ backgroundColor: p.color, width: `${Math.min(100, p.count * 8)}%` }} />
+                  <div className="text-2xl font-bold text-foreground">{p.value}</div>
+                  <div className="h-1.5 rounded-full bg-muted mt-2">
+                    <div
+                      className={`h-full rounded-full ${p.color}`}
+                      style={{ width: `${Math.min(100, p.value * 12)}%` }}
+                    />
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Taux de conversion</CardTitle></CardHeader>
-              <CardContent className="flex items-center gap-6">
-                <div>
-                  <div className="text-4xl font-bold text-primary">{conversionRate}%</div>
-                  <p className="text-sm text-muted-foreground mt-1">Essai → Payant</p>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">En essai</span><span className="font-medium text-foreground">12</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Convertis ce mois</span><span className="font-medium text-foreground">3</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Désistements</span><span className="font-medium text-foreground">1</span></div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4" /> Couverture universitaire</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  {["Yaoundé I", "Douala", "Dschang", "Ngaoundéré", "Maroua", "Buea"].map((u) => (
-                    <div key={u} className="flex items-center gap-2 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      <span className="text-foreground">{u}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-3">6 universités sur 11 — couverture 55%</p>
-              </CardContent>
-            </Card>
-          </div>
+
+          {/* Tableau pipeline complet */}
+          <PipelineTable entries={pipeline} isLoading={loadingPipeline} />
         </div>
 
-        {/* ══════════ SECTION SANTÉ DES COMPTES ══════════ */}
+        {/* ══════════ SANTÉ DES COMPTES ══════════ */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Activity className="h-5 w-5" /> Santé des comptes
           </h3>
           <div className="grid gap-4 lg:grid-cols-2">
+
+            {/* Adoption par module */}
             <Card>
-              <CardHeader><CardTitle className="text-base">Taux d'adoption par module</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Adoption par module</CardTitle>
+                <CardDescription>Départements actifs ce mois-ci par module</CardDescription>
+              </CardHeader>
               <CardContent className="space-y-3">
-                {adoptionRates.map((m) => (
-                  <div key={m.module} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-foreground">{m.module}</span>
-                      <span className="text-muted-foreground">{m.rate}%</span>
+                {loadingAdoption ? (
+                  [0,1,2,3].map(i => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between"><Skeleton className="h-3 w-28" /><Skeleton className="h-3 w-8" /></div>
+                      <Skeleton className="h-2 w-full" />
                     </div>
-                    <Progress value={m.rate} className="h-2" />
+                  ))
+                ) : adoption.map(m => (
+                  <div key={m.name} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground">{m.name}</span>
+                      <span className="text-muted-foreground">
+                        {m.nb_depts}/{m.total_depts} depts ({m.taux}%)
+                      </span>
+                    </div>
+                    <Progress value={m.taux} className="h-2" />
                   </div>
                 ))}
               </CardContent>
             </Card>
+
+            {/* Départements inactifs */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base text-destructive flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4" /> Liste rouge — Départements inactifs
+                  <ShieldAlert className="h-4 w-4" /> Liste rouge
                 </CardTitle>
-                <CardDescription>Inactifs depuis plus de 21 jours</CardDescription>
+                <CardDescription>Inactifs depuis plus de 21 jours (aucune séance)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {inactiveDepts.map((d, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5">
+                {loadingInactifs ? (
+                  [0,1,2].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)
+                ) : inactifs.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-medium">
+                    ✓ Tous les départements sont actifs
+                  </p>
+                ) : inactifs.map(d => (
+                  <div key={d.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5">
                     <Building2 className="h-4 w-4 text-destructive shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
-                      <p className="text-xs text-muted-foreground">Dernière activité : {d.lastActive}</p>
+                      <p className="text-sm font-medium truncate">{d.name}</p>
+                      <p className="text-xs text-muted-foreground">{d.university}</p>
                     </div>
-                    <Badge variant="destructive">{d.days}j</Badge>
+                    <Badge variant="destructive">{d.jours_inactif}j</Badge>
                   </div>
                 ))}
               </CardContent>
@@ -319,46 +410,78 @@ const OwnerDashboard = () => {
           </div>
         </div>
 
-        {/* ══════════ SECTION USAGE PRODUIT ══════════ */}
+        {/* ══════════ USAGE PRODUIT ══════════ */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5" /> Usage produit
           </h3>
           <div className="grid gap-4 lg:grid-cols-2">
+
+            {/* BarChart adoption */}
             <Card>
-              <CardHeader><CardTitle className="text-base">Modules les plus utilisés</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Adoption par module (BarChart)</CardTitle>
+              </CardHeader>
               <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={moduleUsage} layout="vertical" margin={{ left: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                    <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} width={110} />
-                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {loadingAdoption ? (
+                  <div className="h-full flex items-center justify-center"><Skeleton className="h-full w-full" /></div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={adoption} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        type="number" allowDecimals={false}
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                        domain={[0, 'dataMax']}
+                      />
+                      <YAxis
+                        dataKey="name" type="category" width={120}
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                        formatter={(v: number, _, props) => [
+                          `${v} / ${props.payload?.total_depts} depts`,
+                          'Utilisation',
+                        ]}
+                      />
+                      <Bar dataKey="nb_depts" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
+
+            {/* Activité ce mois */}
             <Card>
               <CardHeader><CardTitle className="text-base">Activité ce mois</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: "Emplois du temps générés", value: 47, icon: <CalendarDays className="h-4 w-4 text-muted-foreground" /> },
-                  { label: "Imports Excel effectués", value: 23, icon: <FileText className="h-4 w-4 text-muted-foreground" /> },
-                  { label: "Listes de présence envoyées", value: 156, icon: <ClipboardList className="h-4 w-4 text-muted-foreground" /> },
-                  { label: "Documents générés", value: 89, icon: <FileText className="h-4 w-4 text-muted-foreground" /> },
-                  { label: "Examens planifiés", value: 34, icon: <CalendarClock className="h-4 w-4 text-muted-foreground" /> },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    {item.icon}
-                    <span className="flex-1 text-sm text-foreground">{item.label}</span>
-                    <span className="text-lg font-bold text-foreground">{item.value}</span>
-                  </div>
-                ))}
+              <CardContent className="space-y-3">
+                {loadingStats ? (
+                  [0,1,2,3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)
+                ) : (
+                  <>
+                    {[
+                      { label: 'Séances créées',       value: stats?.nb_seances_ce_mois  ?? 0, icon: <CalendarDays className="h-4 w-4 text-muted-foreground" /> },
+                      { label: 'Documents générés',     value: stats?.nb_documents_generes ?? 0, icon: <FileText     className="h-4 w-4 text-muted-foreground" /> },
+                      { label: 'Enseignants actifs',    value: stats?.nb_enseignants_total ?? 0, icon: <Users        className="h-4 w-4 text-muted-foreground" /> },
+                      { label: 'Départements onboardés',value: stats?.nb_departements_actifs ?? 0, icon: <Building2  className="h-4 w-4 text-muted-foreground" /> },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        {item.icon}
+                        <span className="flex-1 text-sm text-foreground">{item.label}</span>
+                        <span className="text-lg font-bold text-foreground">{item.value}</span>
+                      </div>
+                    ))}
+                    <div className="pt-1 text-xs text-muted-foreground text-right">
+                      Données en temps réel — rafraîchissement automatique
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   );

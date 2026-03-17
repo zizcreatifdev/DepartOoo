@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { format, subDays, parseISO } from "date-fns";
 
 interface UE { id: string; name: string; level: string; }
 interface Salle { id: string; name: string; type: string; capacity: number; }
@@ -52,6 +53,16 @@ const ExamenFormDialog: React.FC<Props> = ({
   const [sujetDeadline, setSujetDeadline] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Auto-calcule la deadline sujet = exam_date - 1 jour
+  const computeAutoDeadline = useCallback((date: string): string => {
+    if (!date) return "";
+    try {
+      return format(subDays(parseISO(date), 1), "yyyy-MM-dd");
+    } catch {
+      return "";
+    }
+  }, []);
+
   useEffect(() => {
     if (examen) {
       setUeId(examen.ue_id);
@@ -69,6 +80,13 @@ const ExamenFormDialog: React.FC<Props> = ({
       setSujetDeadline("");
     }
   }, [examen, open]);
+
+  // Quand la date d'examen change, auto-remplir la deadline si elle est vide (création seulement)
+  useEffect(() => {
+    if (!examen && examDate && !sujetDeadline) {
+      setSujetDeadline(computeAutoDeadline(examDate));
+    }
+  }, [examDate, examen, sujetDeadline, computeAutoDeadline]);
 
   const toggleSalle = (id: string) => {
     setSelectedSalles(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -130,11 +148,13 @@ const ExamenFormDialog: React.FC<Props> = ({
         if (error) throw error;
       }
 
-      // Create/update sujet tracking
+      // Créer l'entrée sujet lors d'un nouvel examen
+      // deadline = date saisie ou exam_date - 1 jour en fallback
       if (!examen) {
+        const computedDeadline = sujetDeadline || computeAutoDeadline(examDate);
         await supabase.from("examen_sujets").insert({
           examen_id: examenId,
-          deadline: sujetDeadline || null,
+          deadline: computedDeadline || null,
           status: "en_attente",
         });
       }

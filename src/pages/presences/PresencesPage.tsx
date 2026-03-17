@@ -30,6 +30,13 @@ const PresencesPage = () => {
   const [levels, setLevels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Année académique courante calculée automatiquement
+  const academicYear = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    return now.getMonth() >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  }, []);
+
   const fetchData = async () => {
     if (!department) return;
     setLoading(true);
@@ -104,6 +111,7 @@ const PresencesPage = () => {
         <TabsContent value="fiche">
           <PresenceSheet
             departmentId={department?.id || ""}
+            academicYear={academicYear}
             students={students}
             seances={seances}
             ues={ues}

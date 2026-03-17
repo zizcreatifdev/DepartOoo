@@ -31,6 +31,8 @@ import PresencesPage from "./pages/presences/PresencesPage";
 import ExamensPage from "./pages/examens/ExamensPage";
 import NotesPage from "./pages/notes/NotesPage";
 import DocumentsPage from "./pages/documents/DocumentsPage";
+import EquipePage from "./pages/equipe/EquipePage";
+import UniversitesPage from "./pages/owner/UniversitesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +62,7 @@ const App = () => (
             <Route path="/dashboard/chef/examens" element={<ProtectedRoute allowedRoles={["chef"]}><ExamensPage /></ProtectedRoute>} />
             <Route path="/dashboard/chef/notes" element={<ProtectedRoute allowedRoles={["chef"]}><NotesPage /></ProtectedRoute>} />
             <Route path="/dashboard/chef/documents" element={<ProtectedRoute allowedRoles={["chef"]}><DocumentsPage /></ProtectedRoute>} />
+            <Route path="/dashboard/chef/equipe" element={<ProtectedRoute allowedRoles={["chef"]}><EquipePage /></ProtectedRoute>} />
             <Route path="/dashboard/chef/*" element={<ProtectedRoute allowedRoles={["chef"]}><ChefDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/assistant" element={<ProtectedRoute allowedRoles={["assistant"]}><AssistantDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/assistant/referentiel" element={<ProtectedRoute allowedRoles={["assistant"]}><ReferentielPage /></ProtectedRoute>} />
@@ -80,6 +83,7 @@ const App = () => (
             <Route path="/dashboard/enseignant/heures" element={<ProtectedRoute allowedRoles={["enseignant"]}><EnseignantHeuresPage /></ProtectedRoute>} />
             <Route path="/dashboard/enseignant/*" element={<ProtectedRoute allowedRoles={["enseignant"]}><EnseignantDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/owner" element={<ProtectedRoute allowedRoles={["owner"]}><OwnerDashboard /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/universites" element={<ProtectedRoute allowedRoles={["owner"]}><UniversitesPage /></ProtectedRoute>} />
             <Route path="/dashboard/owner/*" element={<ProtectedRoute allowedRoles={["owner"]}><OwnerDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

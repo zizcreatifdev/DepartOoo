@@ -3,8 +3,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogHeader,
+  DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { inviterEnseignant } from "@/services/invitations.service";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import EnseignantsList from "@/components/enseignants/EnseignantsList";
 import EnseignantFormDialog from "@/components/enseignants/EnseignantFormDialog";
@@ -35,6 +40,7 @@ const EnseignantsPage = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Enseignant | null>(null);
+  const [limiteMsg, setLimiteMsg] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!department) return;
@@ -80,16 +86,18 @@ const EnseignantsPage = () => {
       toast.info("Ce compte enseignant a déjà été créé");
       return;
     }
-    const { data, error } = await supabase.functions.invoke("invite-teacher", {
-      body: {
-        email: ens.email,
-        full_name: `${ens.first_name} ${ens.last_name}`,
-        enseignant_id: ens.id,
-        department_id: ens.department_id,
-      },
-    });
-    if (error || data?.error) {
-      toast.error(data?.error || "Erreur lors de l'invitation");
+    const result = await inviterEnseignant(
+      ens.email,
+      `${ens.first_name} ${ens.last_name}`,
+      ens.id,
+      ens.department_id,
+    );
+    if (!result.success) {
+      if (result.error === "LIMITE_ATTEINTE") {
+        setLimiteMsg(result.message ?? "Limite d'enseignants atteinte pour votre offre.");
+        return;
+      }
+      toast.error(result.message ?? result.error ?? "Erreur lors de l'invitation");
       return;
     }
     toast.success("Invitation envoyée à " + ens.email);
@@ -141,6 +149,25 @@ const EnseignantsPage = () => {
         departmentId={department?.id || ""}
         onSuccess={fetchData}
       />
+
+      {/* Dialog limite d'offre atteinte */}
+      <Dialog open={!!limiteMsg} onOpenChange={() => setLimiteMsg(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Limite atteinte</DialogTitle>
+            <DialogDescription>{limiteMsg}</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Pour inviter davantage d'enseignants, passez à une offre supérieure depuis la page{" "}
+            <strong>Équipe</strong>.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setLimiteMsg(null)}>
+              Fermer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

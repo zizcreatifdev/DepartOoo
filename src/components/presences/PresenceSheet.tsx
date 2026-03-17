@@ -4,11 +4,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, X, Link2, Copy, AlertTriangle } from "lucide-react";
+import { Check, X, Link2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { usePresencesEngine } from "@/hooks/usePresencesEngine";
 import type { Student } from "./StudentsList";
 
 interface Seance {
@@ -20,6 +21,7 @@ interface Seance {
   start_time: string;
   end_time: string;
   enseignant_id: string;
+  is_cancelled?: boolean;
 }
 
 interface UeInfo {
@@ -49,6 +51,7 @@ interface AbsenceSettings {
 
 interface Props {
   departmentId: string;
+  academicYear: string;
   students: Student[];
   seances: Seance[];
   ues: UeInfo[];
@@ -73,19 +76,21 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PresenceSheet: React.FC<Props> = ({
-  departmentId, students, seances, ues, enseignants, allPresences, absenceSettings, perturbations, canEdit, onRefresh,
+  departmentId, academicYear, students, seances, ues, enseignants, allPresences, absenceSettings, perturbations, canEdit, onRefresh,
 }) => {
   const [selectedSeance, setSelectedSeance] = useState<string>("");
   const [presences, setPresences] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const { runAfterSaisie } = usePresencesEngine();
 
   const ueMap = useMemo(() => new Map(ues.map(u => [u.id, u])), [ues]);
   const ensMap = useMemo(() => new Map(enseignants.map(e => [e.id, e])), [enseignants]);
 
-  // Filter out cancelled seances (perturbation)
+  // Filter out cancelled seances (DB flag takes priority, fallback to perturbation date range)
   const { isSeanceCancelled } = useMemo(() => {
     const fn = (s: Seance) => {
+      if (s.is_cancelled === true) return true;
       return perturbations.some((p: any) => {
         if (s.seance_date < p.start_date || s.seance_date > p.end_date) return false;
         if (p.affected_groups?.length > 0 && !p.affected_groups.includes(s.group_name)) return false;
@@ -151,6 +156,10 @@ const PresenceSheet: React.FC<Props> = ({
     setSaving(false);
     if (error) { toast.error("Erreur: " + error.message); return; }
     toast.success("Présences enregistrées");
+
+    // Vérifier les seuils d'absences en arrière-plan (non bloquant)
+    runAfterSaisie(selectedSeance, departmentId, academicYear);
+
     onRefresh();
   };
 
@@ -218,7 +227,7 @@ const PresenceSheet: React.FC<Props> = ({
                   const isExcluded = absCount >= threshold;
 
                   return (
-                    <TableRow key={s.id} className={isExcluded ? "bg-red-50 opacity-70" : ""}>
+                    <TableRow key={s.id} className={isExcluded ? "bg-red-50 opacity-70" : isNearExclusion ? "bg-amber-50" : ""}>
                       <TableCell className="font-mono text-xs">{s.student_number}</TableCell>
                       <TableCell className="font-medium">{s.last_name}</TableCell>
                       <TableCell>{s.first_name}</TableCell>

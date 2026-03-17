@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Seance, UeInfo, EnseignantInfo, SalleInfo, EffectifInfo } from "@/pages/emploi-du-temps/EmploiDuTempsPage";
+import { verifierConflitsSeance, type Conflit } from "@/engine/conflits.engine";
 
 interface Props {
   open: boolean;
@@ -33,6 +34,8 @@ const TIME_OPTIONS = [
   { label: "17:30 – 19:00", start: "17:30", end: "19:00" },
 ];
 
+const DEBOUNCE_MS = 600;
+
 const SeanceFormDialog: React.FC<Props> = ({
   open, onOpenChange, seance, departmentId, ues, enseignants, salles, effectifs, existingSeances, onSuccess,
 }) => {
@@ -47,8 +50,15 @@ const SeanceFormDialog: React.FC<Props> = ({
   const [onlineLink, setOnlineLink] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [conflicts, setConflicts] = useState<string[]>([]);
 
+  // --- État des conflits (moteur) ---
+  const [conflits, setConflits] = useState<Conflit[]>([]);
+  const [peutSauvegarder, setPeutSauvegarder] = useState(true);
+  const [verifying, setVerifying] = useState(false);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset à l'ouverture / changement de séance
   useEffect(() => {
     if (seance) {
       setUeId(seance.ue_id);
@@ -74,58 +84,62 @@ const SeanceFormDialog: React.FC<Props> = ({
       setOnlineLink("");
       setNotes("");
     }
-    setConflicts([]);
+    setConflits([]);
+    setPeutSauvegarder(true);
+    setVerifying(false);
   }, [seance, open]);
 
-  // Conflict detection
-  const detectConflicts = useMemo(() => {
-    if (!seanceDate || !enseignantId) return [];
+  // --- Déclenchement de la vérification avec debounce ---
+  const runVerification = useCallback(() => {
     const slot = TIME_OPTIONS[Number(timeSlot)];
-    if (!slot) return [];
+    if (!seanceDate || !enseignantId || !ueId || !slot) {
+      setConflits([]);
+      setPeutSauvegarder(true);
+      setVerifying(false);
+      return;
+    }
 
-    const errors: string[] = [];
-    const otherSeances = existingSeances.filter(s => s.id !== seance?.id && s.seance_date === seanceDate && s.start_time?.substring(0, 5) === slot.start);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setVerifying(true);
 
-    // Salle conflict
-    if (!isOnline && salleId) {
-      const salleConflict = otherSeances.find(s => s.salle_id === salleId);
-      if (salleConflict) {
-        const salle = salles.find(s => s.id === salleId);
-        errors.push(`Cette salle (${salle?.name}) est déjà occupée sur ce créneau`);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const result = await verifierConflitsSeance({
+          seance_date: seanceDate,
+          start_time: slot.start + ":00",
+          end_time: slot.end + ":00",
+          salle_id: isOnline ? null : (salleId || null),
+          enseignant_id: enseignantId,
+          group_name: groupName,
+          ue_id: ueId,
+          department_id: departmentId,
+          type_seance: type,
+          seance_id_exclu: seance?.id,
+        });
+        setConflits(result.conflits);
+        setPeutSauvegarder(result.peutSauvegarder);
+      } catch (err) {
+        console.error("Erreur vérification conflits:", err);
+        // Bloquer la sauvegarde si la vérification échoue : état inconnu
+        setPeutSauvegarder(false);
+        setConflits([{
+          bloquant: true,
+          type: "erreur_verification" as any,
+          message: "Impossible de vérifier les conflits (erreur réseau). Réessayez avant de sauvegarder.",
+        }]);
+      } finally {
+        setVerifying(false);
       }
-    }
+    }, DEBOUNCE_MS);
+  }, [seanceDate, enseignantId, ueId, timeSlot, isOnline, salleId, groupName, departmentId, type, seance]);
 
-    // Enseignant conflict (check disponibilités too)
-    const ensConflict = otherSeances.find(s => s.enseignant_id === enseignantId);
-    if (ensConflict) {
-      const ens = enseignants.find(e => e.id === enseignantId);
-      errors.push(`Cet enseignant (${ens?.first_name} ${ens?.last_name}) a déjà un cours sur ce créneau`);
-    }
-
-    // Capacity check
-    if (!isOnline && salleId && groupName) {
-      const salle = salles.find(s => s.id === salleId);
-      const group = effectifs.find(e => e.group_name === groupName);
-      if (salle && group && group.student_count > salle.capacity) {
-        errors.push(`La salle est trop petite pour l'effectif de ce groupe (${group.student_count} étudiants, capacité ${salle.capacity})`);
-      }
-    }
-
-    // Group conflict
-    const groupConflict = otherSeances.find(s => s.group_name === groupName);
-    if (groupConflict) {
-      errors.push(`Ce groupe (${groupName}) a déjà un cours sur ce créneau`);
-    }
-
-    return errors;
-  }, [seanceDate, enseignantId, salleId, groupName, isOnline, timeSlot, existingSeances, seance, salles, effectifs, enseignants]);
-
+  // Déclencher la vérification à chaque changement de champ clé
   useEffect(() => {
-    setConflicts(detectConflicts);
-  }, [detectConflicts]);
+    runVerification();
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [runVerification]);
 
   const handleSave = async () => {
-    console.log("handleSave called", { ueId, enseignantId, seanceDate, salleId, isOnline, conflicts });
     if (!ueId || !enseignantId || !seanceDate) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
@@ -134,8 +148,8 @@ const SeanceFormDialog: React.FC<Props> = ({
       toast.error("Sélectionnez une salle ou choisissez le mode en ligne");
       return;
     }
-    if (conflicts.length > 0) {
-      toast.error("Résolvez les conflits avant de sauvegarder");
+    if (!peutSauvegarder) {
+      toast.error("Résolvez les conflits bloquants avant de sauvegarder");
       return;
     }
 
@@ -155,8 +169,6 @@ const SeanceFormDialog: React.FC<Props> = ({
       online_link: isOnline ? onlineLink : null,
       notes: notes || null,
     };
-
-    console.log("Saving seance payload:", payload);
 
     let error;
     if (seance) {
@@ -184,6 +196,10 @@ const SeanceFormDialog: React.FC<Props> = ({
     return Array.from(groups).sort();
   }, [effectifs, existingSeances]);
 
+  // Séparer conflits bloquants et avertissements
+  const conflitsBloquants = conflits.filter(c => c.bloquant);
+  const conflitsWarnings = conflits.filter(c => !c.bloquant);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -192,17 +208,6 @@ const SeanceFormDialog: React.FC<Props> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Conflicts */}
-          {conflicts.length > 0 && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <ul className="list-disc pl-4 text-xs space-y-1">
-                  {conflicts.map((c, i) => <li key={i}>{c}</li>)}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* UE */}
           <div className="space-y-1">
@@ -302,10 +307,52 @@ const SeanceFormDialog: React.FC<Props> = ({
             <Input placeholder="Notes optionnelles..." value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
 
+          {/* --- Zone conflits --- */}
+          {verifying && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Vérification des conflits…
+            </div>
+          )}
+
+          {!verifying && conflitsBloquants.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <p className="font-medium mb-1">Conflits bloquants :</p>
+                <ul className="list-disc pl-4 text-xs space-y-1">
+                  {conflitsBloquants.map((c, i) => (
+                    <li key={i}>{c.message}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!verifying && conflitsWarnings.length > 0 && (
+            <Alert className="border-orange-400 bg-orange-50 text-orange-800">
+              <AlertCircle className="h-4 w-4 text-orange-500" />
+              <AlertDescription>
+                <p className="font-medium mb-1">Avertissements :</p>
+                <ul className="list-disc pl-4 text-xs space-y-1">
+                  {conflitsWarnings.map((c, i) => (
+                    <li key={i}>{c.message}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || conflicts.length > 0}>
-              {saving ? "Enregistrement..." : seance ? "Modifier" : "Ajouter"}
+            <Button
+              onClick={handleSave}
+              disabled={saving || verifying || !peutSauvegarder}
+            >
+              {saving
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enregistrement…</>
+                : seance ? "Modifier" : "Ajouter"
+              }
             </Button>
           </div>
         </div>

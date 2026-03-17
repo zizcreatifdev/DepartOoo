@@ -13,6 +13,7 @@ import UeProgressList from "@/components/emploi-du-temps/UeProgressList";
 import EmploiDuTempsFilters from "@/components/emploi-du-temps/EmploiDuTempsFilters";
 import ResponsablesList from "@/components/emploi-du-temps/ResponsablesList";
 import { exportPDF, exportExcel } from "@/components/emploi-du-temps/exportUtils";
+import { getUniversity } from "@/services/universities.service";
 import type { ResponsableClasse } from "@/components/emploi-du-temps/ResponsableFormDialog";
 import type { Perturbation } from "@/components/perturbations/PerturbationFormDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +24,7 @@ export interface Seance {
   ue_id: string;
   enseignant_id: string;
   salle_id: string | null;
-  type: "CM" | "TD" | "TP";
+  type: "CM" | "TD" | "TP" | "rattrapage";
   group_name: string;
   seance_date: string;
   start_time: string;
@@ -32,6 +33,8 @@ export interface Seance {
   online_link: string | null;
   notes: string | null;
   created_by: string | null;
+  /** Marqueur DB : séance annulée suite à une perturbation */
+  is_cancelled?: boolean;
 }
 
 export interface UeInfo {
@@ -84,6 +87,16 @@ const EmploiDuTempsPage = () => {
   const [filterGroup, setFilterGroup] = useState<string>("all");
   const [filterEnseignant, setFilterEnseignant] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [universityLogoUrl, setUniversityLogoUrl] = useState<string | null>(null);
+
+  // Charger le logo de l'université dès que department.university_id est disponible
+  useEffect(() => {
+    const uid = (department as any)?.university_id;
+    if (!uid) { setUniversityLogoUrl(null); return; }
+    getUniversity(uid)
+      .then((u) => setUniversityLogoUrl(u.logo_url))
+      .catch(() => setUniversityLogoUrl(null));
+  }, [(department as any)?.university_id]);
 
   const canEdit = role === "chef" || role === "assistant";
 
@@ -160,15 +173,16 @@ const EmploiDuTempsPage = () => {
     return Array.from(groups).sort();
   }, [seances, effectifs]);
 
-  const handleExportPDF = () => {
-    exportPDF({
+  const handleExportPDF = async () => {
+    await exportPDF({
       seances: filteredSeances,
       ues, enseignants, salles,
       weekStart: currentWeekStart,
       departmentName: department?.name || "",
-      universityName: department?.university || "",
+      universityName: (department as any)?.university || "",
       responsables,
       filterGroup,
+      logoUrl: universityLogoUrl ?? undefined,
     });
     toast.success("PDF exporté");
   };

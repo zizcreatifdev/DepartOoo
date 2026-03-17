@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Mail } from "lucide-react";
 import { toast } from "sonner";
 
+// ── Type exporté — plus de champ password ──────────────────
 export interface AssistantData {
   fullName: string;
   email: string;
-  password: string;
 }
 
 interface Props {
@@ -21,18 +21,23 @@ interface Props {
 const StepAssistantAccount: React.FC<Props> = ({ data, onNext, onBack }) => {
   const [fullName, setFullName] = useState(data.fullName);
   const [email, setEmail] = useState(data.email);
-  const [password, setPassword] = useState(data.password);
 
   const handleSubmit = () => {
-    if (!fullName.trim() || !email.trim() || !password.trim()) {
-      toast.error("Veuillez remplir tous les champs.");
+    if (!fullName.trim() || !email.trim()) {
+      toast.error("Veuillez remplir le nom et l'adresse email.");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Le mot de passe doit contenir au moins 6 caractères.");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      toast.error("Adresse email invalide.");
       return;
     }
-    onNext({ fullName: fullName.trim(), email: email.trim(), password });
+    onNext({ fullName: fullName.trim(), email: email.trim() });
+  };
+
+  /** Ignorer cette étape — invitation à faire depuis le dashboard */
+  const handleSkip = () => {
+    onNext({ fullName: "", email: "" });
   };
 
   return (
@@ -43,29 +48,55 @@ const StepAssistantAccount: React.FC<Props> = ({ data, onNext, onBack }) => {
             <UserPlus className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <CardTitle>Compte Assistant de département</CardTitle>
-            <CardDescription>Créez le compte de votre assistant pour l'aider dans la gestion</CardDescription>
+            <CardTitle>Invitez votre assistant de département</CardTitle>
+            <CardDescription>
+              Votre assistant recevra un email pour créer son mot de passe et accéder à Departo.
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="asst-name">Nom complet *</Label>
-          <Input id="asst-name" placeholder="Nom de l'assistant" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="asst-email">Adresse email *</Label>
-          <Input id="asst-email" type="email" placeholder="assistant@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="asst-password">Mot de passe temporaire *</Label>
-          <Input id="asst-password" type="password" placeholder="Minimum 6 caractères" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <p className="text-xs text-muted-foreground">L'assistant pourra modifier son mot de passe après sa première connexion.</p>
+
+      <CardContent className="space-y-5">
+        <div className="rounded-md bg-blue-50 border border-blue-100 p-3 flex gap-2 text-xs text-blue-700">
+          <Mail className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          L'invitation sera envoyée automatiquement à la fin de la configuration.
         </div>
 
-        <div className="flex justify-between">
+        <div className="space-y-2">
+          <Label htmlFor="asst-name">Nom complet *</Label>
+          <Input
+            id="asst-name"
+            placeholder="Nom de l'assistant"
+            value={fullName}
+            onChange={e => setFullName(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="asst-email">Adresse email *</Label>
+          <Input
+            id="asst-email"
+            type="email"
+            placeholder="assistant@universite.dz"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center pt-1">
           <Button variant="outline" onClick={onBack}>Précédent</Button>
           <Button onClick={handleSubmit}>Suivant</Button>
+        </div>
+
+        <div className="text-center pt-1">
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+          >
+            Je le ferai plus tard depuis mon dashboard
+          </button>
         </div>
       </CardContent>
     </Card>

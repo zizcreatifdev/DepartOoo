@@ -7,6 +7,7 @@ import StepDepartmentInfo, { DepartmentData } from "@/components/onboarding/Step
 import StepChefAccount, { ChefData } from "@/components/onboarding/StepChefAccount";
 import StepAssistantAccount, { AssistantData } from "@/components/onboarding/StepAssistantAccount";
 import StepConfirmation from "@/components/onboarding/StepConfirmation";
+import { inviterAssistant } from "@/services/invitations.service";
 import { GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,10 +18,11 @@ const Onboarding = () => {
   const [loading, setLoading] = useState(false);
 
   const [departmentData, setDepartmentData] = useState<DepartmentData>({
-    name: "", university: "", filieres: [], levels: [],
+    name: "", university_id: "", university_name: "", university_logo_url: null,
+    filieres: [], levels: [],
   });
   const [chefData, setChefData] = useState<ChefData>({ fullName: "", email: "" });
-  const [assistantData, setAssistantData] = useState<AssistantData>({ fullName: "", email: "", password: "" });
+  const [assistantData, setAssistantData] = useState<AssistantData>({ fullName: "", email: "" });
 
   const handleDepartmentNext = (data: DepartmentData) => {
     setDepartmentData(data);
@@ -45,7 +47,12 @@ const Onboarding = () => {
       // 1. Create department
       const { data: dept, error: deptError } = await supabase
         .from("departments")
-        .insert({ name: departmentData.name, university: departmentData.university })
+        .insert({
+          name:          departmentData.name,
+          university:    departmentData.university_name,   // rétrocompat. colonne texte
+          university_id: departmentData.university_id || null,
+          offre:         "starter",
+        })
         .select()
         .single();
 
@@ -72,11 +79,23 @@ const Onboarding = () => {
         .eq("id", user.id);
       if (profErr) throw profErr;
 
-      // 5. Create assistant account via edge function (or direct signup for now)
-      // For now, we'll use supabase.auth.signUp with a service role in an edge function
-      // Simplified: store assistant data for later creation
-      // TODO: Replace with edge function call for production
-      
+      // 5. Inviter l'assistant si renseigné (non-bloquant)
+      if (assistantData.email && assistantData.fullName) {
+        const result = await inviterAssistant(
+          assistantData.email,
+          assistantData.fullName,
+          dept.id,
+        );
+        if (!result.success) {
+          console.error("Invitation assistant échouée:", result.message);
+          toast.warning("Invitation non envoyée. Faites-le depuis votre dashboard.", {
+            description: result.message,
+          });
+        } else {
+          toast.success(`Invitation envoyée à ${assistantData.email}`);
+        }
+      }
+
       // 6. Mark onboarding as completed
       const { error: completeErr } = await supabase
         .from("departments")
