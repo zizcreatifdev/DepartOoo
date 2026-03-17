@@ -35,14 +35,14 @@ function generatePassword(): string {
 const CreateChefDialog = ({
   open, onOpenChange, departmentId, departmentName, onCreated,
 }: Props) => {
-  const [username,  setUsername]  = useState("");
-  const [fullName,  setFullName]  = useState("");
-  const [password,  setPassword]  = useState(generatePassword());
-  const [showPwd,   setShowPwd]   = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [copied,    setCopied]    = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
-  const [success,   setSuccess]   = useState(false); // afficher récapitulatif après création
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState(generatePassword());
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [copied,   setCopied]   = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [success,  setSuccess]  = useState(false);
 
   const email = username.trim()
     ? `${username.trim().toLowerCase()}@departo.app`
@@ -57,15 +57,11 @@ const CreateChefDialog = ({
   async function handleCreate() {
     setError(null);
     if (!username.trim()) return setError("Le nom d'utilisateur est requis.");
-    if (!fullName.trim()) return setError("Le nom complet est requis.");
+    if (!fullName.trim())  return setError("Le nom complet est requis.");
     if (password.length < 8) return setError("Le mot de passe doit faire au moins 8 caractères.");
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("Session expirée.");
-
       const res = await supabase.functions.invoke("create-chef", {
         body: {
           username:      username.trim().toLowerCase(),
@@ -80,7 +76,7 @@ const CreateChefDialog = ({
 
       toast.success(`Chef créé — ${email}`);
       onCreated?.();
-      setSuccess(true); // rester ouvert pour afficher les identifiants
+      setSuccess(true);
     } catch (e: any) {
       setError(e.message ?? "Erreur lors de la création.");
     } finally {
@@ -109,8 +105,8 @@ const CreateChefDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        {/* ── Récapitulatif après création ── */}
         {success ? (
+          /* ── Récapitulatif après création ── */
           <div className="py-2 space-y-4">
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-3">
               <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
@@ -140,82 +136,75 @@ const CreateChefDialog = ({
             </p>
           </div>
         ) : (
-
-        <div className="space-y-4 py-2">
-          {/* Nom complet */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nom complet *</Label>
-            <Input
-              placeholder="ex: Mamadou Diallo"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-          </div>
-
-          {/* Username → email */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Identifiant (username) *</Label>
-            <div className="flex gap-2 items-center">
+          /* ── Formulaire de création ── */
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nom complet *</Label>
               <Input
-                placeholder="ex: m.diallo"
-                value={username}
-                onChange={(e) =>
-                  setUsername(e.target.value.replace(/[^a-zA-Z0-9._-]/g, ""))
-                }
-                className="flex-1"
+                placeholder="ex: Mamadou Diallo"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
               />
-              <span className="text-muted-foreground text-xs whitespace-nowrap">@departo.app</span>
             </div>
-            {email && (
-              <p className="text-xs text-primary font-mono mt-1">
-                📧 {email}
-              </p>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              Lettres, chiffres, . _ - uniquement. C'est l'email de connexion.
-            </p>
-          </div>
 
-          {/* Mot de passe */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Mot de passe temporaire *</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Identifiant (username) *</Label>
+              <div className="flex gap-2 items-center">
                 <Input
-                  type={showPwd ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pr-9 font-mono text-sm"
+                  placeholder="ex: m.diallo"
+                  value={username}
+                  onChange={(e) =>
+                    setUsername(e.target.value.replace(/[^a-zA-Z0-9._-]/g, ""))
+                  }
+                  className="flex-1"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd(!showPwd)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">@departo.app</span>
               </div>
-              <Button
-                variant="outline" size="icon"
-                onClick={copyCredentials}
-                title="Copier les identifiants"
-              >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
+              {email && (
+                <p className="text-xs text-primary font-mono mt-1">📧 {email}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Lettres, chiffres, . _ - uniquement. C'est l'email de connexion.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Le chef peut modifier son mot de passe à sa première connexion.
-            </p>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Mot de passe temporaire *</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showPwd ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-9 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd(!showPwd)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button
+                  variant="outline" size="icon"
+                  onClick={copyCredentials}
+                  title="Copier les identifiants"
+                >
+                  {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Le chef peut modifier son mot de passe à sa première connexion.
+              </p>
+            </div>
+
+            {error && (
+              <Alert variant="destructive" className="py-2">
+                <AlertDescription className="text-xs">{error}</AlertDescription>
+              </Alert>
+            )}
           </div>
-
-          {error && (
-            <Alert variant="destructive" className="py-2">
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
-
-        {/* Fermer le formulaire de saisie */}
         )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
