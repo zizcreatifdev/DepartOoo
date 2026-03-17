@@ -2,6 +2,7 @@
  * DepartementsPage — Owner
  * Liste tous les départements enregistrés sur la plateforme.
  * Données réelles Supabase (table departments + profiles).
+ * Actions : créer chef, bloquer, restaurer, supprimer.
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +10,6 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,12 +18,22 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2, Search, GraduationCap, Users, CheckCircle2,
-  Clock, ChevronRight, CalendarDays, UserPlus, Plus,
+  Clock, CalendarDays, UserPlus, Plus, MoreVertical,
+  Ban, RotateCcw, Trash2, ShieldOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +49,7 @@ interface Departement {
   ufr: string | null;
   onboarding_completed: boolean;
   offre: string | null;
+  status: "active" | "blocked";
   created_at: string;
   chef_name: string | null;
   chef_email: string | null;
@@ -48,7 +59,6 @@ interface Departement {
 
 // ── Service ──────────────────────────────────────────────────
 async function fetchDepartements(): Promise<Departement[]> {
-  // 1. Récupérer tous les départements sans join
   const { data: depts, error } = await (supabase as any)
     .from("departments")
     .select("*")
@@ -57,11 +67,7 @@ async function fetchDepartements(): Promise<Departement[]> {
   if (error) throw error;
   if (!depts || depts.length === 0) return [];
 
-  // 2. Récupérer les profils des chefs en une seule requête
-  const chefIds = depts
-    .map((d: any) => d.chef_id)
-    .filter(Boolean);
-
+  const chefIds = depts.map((d: any) => d.chef_id).filter(Boolean);
   const profilesMap: Record<string, { full_name: string; email: string }> = {};
   if (chefIds.length > 0) {
     const { data: profiles } = await (supabase as any)
@@ -73,7 +79,6 @@ async function fetchDepartements(): Promise<Departement[]> {
     });
   }
 
-  // 3. Enrichir avec comptages
   const enriched = await Promise.all(
     depts.map(async (d: any) => {
       const [{ count: nb_enseignants }, { count: nb_filieres }] = await Promise.all([
@@ -89,6 +94,7 @@ async function fetchDepartements(): Promise<Departement[]> {
         ufr: d.ufr ?? null,
         onboarding_completed: d.onboarding_completed ?? false,
         offre: d.offre ?? null,
+        status: (d.status ?? "active") as "active" | "blocked",
         created_at: d.created_at,
         chef_name: chef?.full_name ?? null,
         chef_email: chef?.email ?? null,
@@ -123,12 +129,12 @@ interface NouveauDeptDialogProps {
 }
 
 function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogProps) {
-  const [univId,   setUnivId]       = useState("");
-  const [ufr,      setUfr]          = useState("");
-  const [deptName, setDeptName]     = useState("");
-  const [offre,    setOffre]        = useState<"starter"|"pro"|"universite">("starter");
-  const [saving,   setSaving]       = useState(false);
-  const [error,    setError]        = useState<string | null>(null);
+  const [univId,   setUnivId]   = useState("");
+  const [ufr,      setUfr]      = useState("");
+  const [deptName, setDeptName] = useState("");
+  const [offre,    setOffre]    = useState<"starter" | "pro" | "universite">("starter");
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
 
   const { data: universities = [] } = useQuery<University[]>({
     queryKey: ["universities-list"],
@@ -139,13 +145,12 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
   function reset() {
     setUnivId(""); setUfr(""); setDeptName(""); setOffre("starter"); setError(null);
   }
-
   function close() { onOpenChange(false); reset(); }
 
   async function handleCreate() {
     setError(null);
     if (!univId)          return setError("Veuillez sélectionner une université.");
-    if (!deptName.trim()) return setError("Le nom du département (UFR) est requis.");
+    if (!deptName.trim()) return setError("Le nom du département est requis.");
 
     const univ = universities.find((u) => u.id === univId);
     setSaving(true);
@@ -159,6 +164,7 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
           ufr:                  ufr.trim() || null,
           offre,
           onboarding_completed: false,
+          status:               "active",
         });
       if (err) throw err;
 
@@ -182,7 +188,6 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Université */}
           <div className="space-y-1.5">
             <Label className="text-xs">Université *</Label>
             <Select value={univId} onValueChange={setUnivId}>
@@ -199,34 +204,29 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
             </Select>
           </div>
 
-          {/* UFR */}
           <div className="space-y-1.5">
             <Label className="text-xs">UFR (Unité de Formation et de Recherche)</Label>
             <Input
-              placeholder="ex: UFR Sciences et Technologies, UFR Lettres…"
+              placeholder="ex: UFR Sciences et Technologies…"
               value={ufr}
               onChange={(e) => setUfr(e.target.value)}
             />
             <p className="text-[11px] text-muted-foreground">Optionnel — niveau intermédiaire entre l'université et le département</p>
           </div>
 
-          {/* Département */}
           <div className="space-y-1.5">
             <Label className="text-xs">Nom du département *</Label>
             <Input
-              placeholder="ex: Département Informatique, Département Mathématiques…"
+              placeholder="ex: Département Informatique…"
               value={deptName}
               onChange={(e) => setDeptName(e.target.value)}
             />
           </div>
 
-          {/* Offre */}
           <div className="space-y-1.5">
             <Label className="text-xs">Offre souscrite *</Label>
             <Select value={offre} onValueChange={(v: any) => setOffre(v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="starter">Starter</SelectItem>
                 <SelectItem value="pro">Pro</SelectItem>
@@ -254,14 +254,21 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
 }
 
 // ── Page ─────────────────────────────────────────────────────
+type ActionType = "block" | "restore" | "delete";
+
 const DepartementsPage = () => {
   const qc = useQueryClient();
-  const [search, setSearch]   = useState("");
-  const [filter, setFilter]   = useState<"tous" | "actifs" | "en_cours">("tous");
+  const [search,      setSearch]      = useState("");
+  const [filter,      setFilter]      = useState<"tous" | "actifs" | "en_cours" | "bloques">("tous");
   const [newDeptOpen, setNewDeptOpen] = useState(false);
 
   // Créer chef
   const [createChefDept, setCreateChefDept] = useState<{ id: string; name: string } | null>(null);
+
+  // Action (bloquer / restaurer / supprimer)
+  const [actionDept,    setActionDept]    = useState<Departement | null>(null);
+  const [actionType,    setActionType]    = useState<ActionType | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const { data: depts = [], isLoading } = useQuery({
     queryKey: ["owner-departements"],
@@ -277,26 +284,89 @@ const DepartementsPage = () => {
       (d.chef_name ?? "").toLowerCase().includes(search.toLowerCase());
 
     const matchFilter =
-      filter === "tous" ||
-      (filter === "actifs"   && d.onboarding_completed) ||
-      (filter === "en_cours" && !d.onboarding_completed);
+      filter === "tous"     ||
+      (filter === "actifs"   && d.onboarding_completed && d.status === "active") ||
+      (filter === "en_cours" && !d.onboarding_completed && d.status === "active") ||
+      (filter === "bloques"  && d.status === "blocked");
 
     return matchSearch && matchFilter;
   });
 
-  const nbActifs  = depts.filter((d) =>  d.onboarding_completed).length;
-  const nbEnCours = depts.filter((d) => !d.onboarding_completed).length;
+  const nbActifs  = depts.filter((d) =>  d.onboarding_completed && d.status === "active").length;
+  const nbEnCours = depts.filter((d) => !d.onboarding_completed && d.status === "active").length;
+  const nbBloques = depts.filter((d) =>  d.status === "blocked").length;
 
   function refreshDepts() {
     qc.invalidateQueries({ queryKey: ["owner-departements"] });
   }
+
+  function openAction(dept: Departement, type: ActionType) {
+    setActionDept(dept);
+    setActionType(type);
+  }
+
+  async function confirmAction() {
+    if (!actionDept || !actionType) return;
+    setActionLoading(true);
+    try {
+      if (actionType === "delete") {
+        const { error } = await (supabase as any)
+          .from("departments")
+          .delete()
+          .eq("id", actionDept.id);
+        if (error) throw error;
+        toast.success(`Département "${actionDept.name}" supprimé`);
+      } else {
+        const newStatus = actionType === "block" ? "blocked" : "active";
+        const { error } = await (supabase as any)
+          .from("departments")
+          .update({ status: newStatus })
+          .eq("id", actionDept.id);
+        if (error) throw error;
+        toast.success(
+          actionType === "block"
+            ? `Département "${actionDept.name}" bloqué`
+            : `Département "${actionDept.name}" restauré`
+        );
+      }
+      refreshDepts();
+    } catch (e: any) {
+      toast.error(e.message ?? "Erreur lors de l'action.");
+    } finally {
+      setActionLoading(false);
+      setActionDept(null);
+      setActionType(null);
+    }
+  }
+
+  // Textes de la modale de confirmation
+  const actionMeta: Record<ActionType, { title: string; desc: (name: string) => string; btn: string; variant: "destructive" | "default" }> = {
+    block: {
+      title: "Bloquer le département",
+      desc: (n) => `Le département "${n}" sera suspendu. Le chef et les enseignants ne pourront plus se connecter. Vous pourrez le restaurer à tout moment.`,
+      btn: "Bloquer",
+      variant: "destructive",
+    },
+    restore: {
+      title: "Restaurer le département",
+      desc: (n) => `Le département "${n}" sera de nouveau actif. Le chef et les enseignants retrouveront accès à leur espace.`,
+      btn: "Restaurer",
+      variant: "default",
+    },
+    delete: {
+      title: "Supprimer le département",
+      desc: (n) => `Cette action est irréversible. Le département "${n}" et toutes ses données (filières, enseignants…) seront définitivement supprimés.`,
+      btn: "Supprimer définitivement",
+      variant: "destructive",
+    },
+  };
 
   return (
     <DashboardLayout title="Départements">
       <div className="space-y-6">
 
         {/* ── Stats ── */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <Card>
             <CardContent className="pt-4 pb-4 flex items-center gap-3">
               <Building2 className="h-5 w-5 text-primary" />
@@ -324,6 +394,15 @@ const DepartementsPage = () => {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <ShieldOff className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-2xl font-bold text-red-500">{nbBloques}</p>
+                <p className="text-xs text-muted-foreground">Bloqués</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Liste ── */}
@@ -333,13 +412,8 @@ const DepartementsPage = () => {
               <CardTitle className="text-base flex items-center gap-2">
                 <Building2 className="h-4 w-4" /> Liste des départements
               </CardTitle>
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setNewDeptOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Nouveau département
+              <Button size="sm" className="gap-1.5" onClick={() => setNewDeptOpen(true)}>
+                <Plus className="h-4 w-4" /> Nouveau département
               </Button>
             </div>
           </CardHeader>
@@ -355,16 +429,21 @@ const DepartementsPage = () => {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div className="flex gap-1">
-                {(["tous", "actifs", "en_cours"] as const).map((f) => (
+              <div className="flex gap-1 flex-wrap">
+                {([
+                  { key: "tous",     label: "Tous" },
+                  { key: "actifs",   label: "✓ Actifs" },
+                  { key: "en_cours", label: "⏳ En cours" },
+                  { key: "bloques",  label: "🚫 Bloqués" },
+                ] as const).map(({ key, label }) => (
                   <Button
-                    key={f}
-                    variant={filter === f ? "default" : "outline"}
+                    key={key}
+                    variant={filter === key ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setFilter(f)}
+                    onClick={() => setFilter(key)}
                     className="text-xs"
                   >
-                    {f === "tous" ? "Tous" : f === "actifs" ? "✓ Actifs" : "⏳ En cours"}
+                    {label}
                   </Button>
                 ))}
               </div>
@@ -379,30 +458,44 @@ const DepartementsPage = () => {
               </div>
             ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground text-sm">
-                {depts.length === 0
-                  ? <div className="space-y-2">
-                      <p>Aucun département enregistré pour l'instant.</p>
-                      <Button variant="outline" size="sm" onClick={() => setNewDeptOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1" /> Créer le premier département
-                      </Button>
-                    </div>
-                  : "Aucun résultat pour cette recherche."}
+                {depts.length === 0 ? (
+                  <div className="space-y-2">
+                    <p>Aucun département enregistré pour l'instant.</p>
+                    <Button variant="outline" size="sm" onClick={() => setNewDeptOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Créer le premier département
+                    </Button>
+                  </div>
+                ) : (
+                  "Aucun résultat pour cette recherche."
+                )}
               </div>
             ) : (
               <div className="space-y-2">
                 {filtered.map((d) => (
                   <div
                     key={d.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+                    className={`flex items-center gap-3 p-3 rounded-lg border bg-card transition-colors ${
+                      d.status === "blocked"
+                        ? "opacity-60 bg-red-50/50 border-red-200"
+                        : "hover:bg-muted/30"
+                    }`}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <Building2 className="h-4 w-4 text-primary" />
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                      d.status === "blocked" ? "bg-red-100" : "bg-primary/10"
+                    }`}>
+                      {d.status === "blocked"
+                        ? <Ban className="h-4 w-4 text-red-500" />
+                        : <Building2 className="h-4 w-4 text-primary" />
+                      }
                     </div>
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium truncate">{d.name}</p>
                         <OffreBadge offre={d.offre} />
-                        {d.onboarding_completed ? (
+                        {d.status === "blocked" ? (
+                          <span className="text-[10px] text-red-600 font-medium">● Bloqué</span>
+                        ) : d.onboarding_completed ? (
                           <span className="text-[10px] text-emerald-600 font-medium">● Actif</span>
                         ) : (
                           <span className="text-[10px] text-amber-600 font-medium">● En cours</span>
@@ -434,20 +527,51 @@ const DepartementsPage = () => {
                         </span>
                       </div>
                     </div>
+
+                    {/* Actions */}
                     <div className="flex items-center gap-1 shrink-0">
-                      {/* Bouton Créer chef si pas encore de chef */}
-                      {!d.chef_name && (
+                      {!d.chef_name && d.status === "active" && (
                         <Button
                           variant="outline"
                           size="sm"
                           className="text-xs h-7 gap-1"
                           onClick={() => setCreateChefDept({ id: d.id, name: d.name })}
                         >
-                          <UserPlus className="h-3 w-3" />
-                          Créer chef
+                          <UserPlus className="h-3 w-3" /> Créer chef
                         </Button>
                       )}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          {d.status === "active" ? (
+                            <DropdownMenuItem
+                              className="text-amber-600 focus:text-amber-600 gap-2"
+                              onClick={() => openAction(d, "block")}
+                            >
+                              <Ban className="h-4 w-4" /> Bloquer
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              className="text-emerald-600 focus:text-emerald-600 gap-2"
+                              onClick={() => openAction(d, "restore")}
+                            >
+                              <RotateCcw className="h-4 w-4" /> Restaurer
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive gap-2"
+                            onClick={() => openAction(d, "delete")}
+                          >
+                            <Trash2 className="h-4 w-4" /> Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))}
@@ -477,12 +601,36 @@ const DepartementsPage = () => {
           onOpenChange={(v) => { if (!v) setCreateChefDept(null); }}
           departmentId={createChefDept.id}
           departmentName={createChefDept.name}
-          onCreated={() => {
-            setCreateChefDept(null);
-            refreshDepts();
-          }}
+          onCreated={() => { setCreateChefDept(null); refreshDepts(); }}
         />
       )}
+
+      {/* AlertDialog confirmation action */}
+      <AlertDialog
+        open={!!actionDept && !!actionType}
+        onOpenChange={(v) => { if (!v) { setActionDept(null); setActionType(null); } }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {actionType ? actionMeta[actionType].title : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionDept && actionType ? actionMeta[actionType].desc(actionDept.name) : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={actionLoading}
+              onClick={confirmAction}
+              className={actionType === "restore" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+            >
+              {actionLoading ? "En cours…" : (actionType ? actionMeta[actionType].btn : "")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
