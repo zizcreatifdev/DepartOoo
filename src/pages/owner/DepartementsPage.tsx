@@ -11,13 +11,23 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
   Building2, Search, GraduationCap, Users, CheckCircle2,
-  Clock, ChevronRight, CalendarDays, UserPlus,
+  Clock, ChevronRight, CalendarDays, UserPlus, Plus,
 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getAllUniversities, University } from "@/services/universities.service";
 import CreateChefDialog from "@/components/owner/CreateChefDialog";
 
 // ── Types ────────────────────────────────────────────────────
@@ -47,7 +57,6 @@ async function fetchDepartements(): Promise<Departement[]> {
 
   if (error) throw error;
 
-  // Compter enseignants et filières en parallèle
   const enriched = await Promise.all(
     (depts ?? []).map(async (d: any) => {
       const [{ count: nb_enseignants }, { count: nb_filieres }] = await Promise.all([
@@ -75,8 +84,8 @@ async function fetchDepartements(): Promise<Departement[]> {
 // ── Helpers ──────────────────────────────────────────────────
 function OffreBadge({ offre }: { offre: string | null }) {
   const map: Record<string, string> = {
-    starter: "bg-slate-100 text-slate-700 border-slate-200",
-    pro: "bg-blue-100 text-blue-700 border-blue-200",
+    starter:    "bg-slate-100 text-slate-700 border-slate-200",
+    pro:        "bg-blue-100 text-blue-700 border-blue-200",
     universite: "bg-violet-100 text-violet-700 border-violet-200",
   };
   const label = offre ? offre.charAt(0).toUpperCase() + offre.slice(1) : "—";
@@ -87,25 +96,138 @@ function OffreBadge({ offre }: { offre: string | null }) {
   );
 }
 
-function StatCard({ label, value, icon, color }: { label: string; value: number | string; icon: React.ReactNode; color: string }) {
+// ── Dialog Nouveau département ────────────────────────────────
+interface NouveauDeptDialogProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreated: () => void;
+}
+
+function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogProps) {
+  const [deptName, setDeptName]     = useState("");
+  const [ufr,      setUfr]          = useState("");
+  const [univId,   setUnivId]       = useState("");
+  const [offre,    setOffre]        = useState<"starter"|"pro"|"universite">("starter");
+  const [saving,   setSaving]       = useState(false);
+  const [error,    setError]        = useState<string | null>(null);
+
+  const { data: universities = [] } = useQuery<University[]>({
+    queryKey: ["universities-list"],
+    queryFn: getAllUniversities,
+    staleTime: 5 * 60_000,
+  });
+
+  function reset() {
+    setDeptName(""); setUfr(""); setUnivId(""); setOffre("starter"); setError(null);
+  }
+
+  function close() { onOpenChange(false); reset(); }
+
+  async function handleCreate() {
+    setError(null);
+    if (!univId)          return setError("Veuillez sélectionner une université.");
+    if (!deptName.trim()) return setError("Le nom du département (UFR) est requis.");
+
+    const univ = universities.find((u) => u.id === univId);
+    setSaving(true);
+    try {
+      const { error: err } = await (supabase as any)
+        .from("departments")
+        .insert({
+          name:                 deptName.trim(),
+          university_id:        univId,
+          university:           univ?.name ?? "",
+          offre,
+          onboarding_completed: false,
+        });
+      if (err) throw err;
+
+      toast.success(`Département "${deptName.trim()}" créé ✅`);
+      onCreated();
+      close();
+    } catch (e: any) {
+      setError(e.message ?? "Erreur lors de la création.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <Card className={`border-${color}/20 bg-${color}/5`}>
-      <CardContent className="pt-4 pb-4 flex items-center gap-3">
-        <div className={`text-${color}`}>{icon}</div>
-        <div>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) close(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" /> Nouveau département
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Université */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Université *</Label>
+            <Select value={univId} onValueChange={setUnivId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir une université…" />
+              </SelectTrigger>
+              <SelectContent>
+                {universities.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.short_name ? `${u.name} (${u.short_name})` : u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Nom UFR / Département */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nom du département / UFR *</Label>
+            <Input
+              placeholder="ex: Département Informatique, UFR Sciences…"
+              value={deptName}
+              onChange={(e) => setDeptName(e.target.value)}
+            />
+          </div>
+
+          {/* Offre */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Offre souscrite *</Label>
+            <Select value={offre} onValueChange={(v: any) => setOffre(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="starter">Starter</SelectItem>
+                <SelectItem value="pro">Pro</SelectItem>
+                <SelectItem value="universite">Université</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {error && (
+            <Alert variant="destructive" className="py-2">
+              <AlertDescription className="text-xs">{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={close}>Annuler</Button>
+          <Button onClick={handleCreate} disabled={saving}>
+            {saving ? "Création…" : "Créer le département"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 // ── Page ─────────────────────────────────────────────────────
 const DepartementsPage = () => {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"tous" | "actifs" | "en_cours">("tous");
+  const [search, setSearch]   = useState("");
+  const [filter, setFilter]   = useState<"tous" | "actifs" | "en_cours">("tous");
+  const [newDeptOpen, setNewDeptOpen] = useState(false);
 
   // Créer chef
   const [createChefDept, setCreateChefDept] = useState<{ id: string; name: string } | null>(null);
@@ -125,14 +247,18 @@ const DepartementsPage = () => {
 
     const matchFilter =
       filter === "tous" ||
-      (filter === "actifs" && d.onboarding_completed) ||
+      (filter === "actifs"   && d.onboarding_completed) ||
       (filter === "en_cours" && !d.onboarding_completed);
 
     return matchSearch && matchFilter;
   });
 
-  const nbActifs = depts.filter((d) => d.onboarding_completed).length;
+  const nbActifs  = depts.filter((d) =>  d.onboarding_completed).length;
   const nbEnCours = depts.filter((d) => !d.onboarding_completed).length;
+
+  function refreshDepts() {
+    qc.invalidateQueries({ queryKey: ["owner-departements"] });
+  }
 
   return (
     <DashboardLayout title="Départements">
@@ -169,14 +295,25 @@ const DepartementsPage = () => {
           </Card>
         </div>
 
-        {/* ── Filtres + recherche ── */}
+        {/* ── Liste ── */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Building2 className="h-4 w-4" /> Liste des départements
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4" /> Liste des départements
+              </CardTitle>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setNewDeptOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Nouveau département
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Filtres + recherche */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -202,7 +339,7 @@ const DepartementsPage = () => {
               </div>
             </div>
 
-            {/* ── Liste ── */}
+            {/* Résultats */}
             {isLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -212,7 +349,12 @@ const DepartementsPage = () => {
             ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground text-sm">
                 {depts.length === 0
-                  ? "Aucun département enregistré pour l'instant."
+                  ? <div className="space-y-2">
+                      <p>Aucun département enregistré pour l'instant.</p>
+                      <Button variant="outline" size="sm" onClick={() => setNewDeptOpen(true)}>
+                        <Plus className="h-4 w-4 mr-1" /> Créer le premier département
+                      </Button>
+                    </div>
                   : "Aucun résultat pour cette recherche."}
               </div>
             ) : (
@@ -241,9 +383,13 @@ const DepartementsPage = () => {
                             <GraduationCap className="h-3 w-3" /> {d.university}
                           </span>
                         )}
-                        {d.chef_name && (
+                        {d.chef_name ? (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Users className="h-3 w-3" /> {d.chef_name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-600 flex items-center gap-1">
+                            <Users className="h-3 w-3" /> Pas de chef
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -256,7 +402,8 @@ const DepartementsPage = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {!d.chef_name && d.onboarding_completed && (
+                      {/* Bouton Créer chef si pas encore de chef */}
+                      {!d.chef_name && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -283,6 +430,13 @@ const DepartementsPage = () => {
         </Card>
       </div>
 
+      {/* Dialog nouveau département */}
+      <NouveauDeptDialog
+        open={newDeptOpen}
+        onOpenChange={setNewDeptOpen}
+        onCreated={refreshDepts}
+      />
+
       {/* Dialog création chef */}
       {createChefDept && (
         <CreateChefDialog
@@ -292,7 +446,7 @@ const DepartementsPage = () => {
           departmentName={createChefDept.name}
           onCreated={() => {
             setCreateChefDept(null);
-            qc.invalidateQueries({ queryKey: ["owner-departements"] });
+            refreshDepts();
           }}
         />
       )}

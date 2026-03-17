@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAlertes } from "@/hooks/useAlertes";
 import AlertesBadge from "@/components/alertes/AlertesBadge";
 import AlertesPanel from "@/components/alertes/AlertesPanel";
-import NouveauClientWizard from "@/components/owner/NouveauClientWizard";
 import {
   SidebarProvider,
   Sidebar,
@@ -112,8 +111,6 @@ function SidebarNav() {
   const collapsed = state === "collapsed";
   const navigate = useNavigate();
   const items = menuByRole[role || "enseignant"] || [];
-  const [wizardOpen, setWizardOpen] = useState(false);
-
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
@@ -128,20 +125,6 @@ function SidebarNav() {
         </div>
         {!collapsed && <span className="font-bold text-sidebar-foreground">Departo</span>}
       </div>
-
-      {/* Bouton Nouveau client — owner uniquement */}
-      {role === "owner" && (
-        <div className="px-3 pt-3 pb-1">
-          <Button
-            size="sm"
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-            onClick={() => setWizardOpen(true)}
-          >
-            <UserPlus className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>Nouveau client</span>}
-          </Button>
-        </div>
-      )}
 
       <SidebarContent>
         <SidebarGroup>
@@ -189,14 +172,7 @@ function SidebarNav() {
       </div>
     </Sidebar>
 
-    {/* Wizard Nouveau client */}
-    {role === "owner" && (
-      <NouveauClientWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-      />
-    )}
-    </>
+</>
   );
 }
 
