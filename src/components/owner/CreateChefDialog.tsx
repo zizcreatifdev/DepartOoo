@@ -42,6 +42,7 @@ const CreateChefDialog = ({
   const [loading,   setLoading]   = useState(false);
   const [copied,    setCopied]    = useState(false);
   const [error,     setError]     = useState<string | null>(null);
+  const [success,   setSuccess]   = useState(false); // afficher récapitulatif après création
 
   const email = username.trim()
     ? `${username.trim().toLowerCase()}@departo.app`
@@ -50,7 +51,7 @@ const CreateChefDialog = ({
   function reset() {
     setUsername(""); setFullName("");
     setPassword(generatePassword()); setShowPwd(false);
-    setError(null); setCopied(false);
+    setError(null); setCopied(false); setSuccess(false);
   }
 
   async function handleCreate() {
@@ -79,8 +80,7 @@ const CreateChefDialog = ({
 
       toast.success(`Chef créé — ${email}`);
       onCreated?.();
-      onOpenChange(false);
-      reset();
+      setSuccess(true); // rester ouvert pour afficher les identifiants
     } catch (e: any) {
       setError(e.message ?? "Erreur lors de la création.");
     } finally {
@@ -108,6 +108,38 @@ const CreateChefDialog = ({
             Département : <strong>{departmentName}</strong>
           </DialogDescription>
         </DialogHeader>
+
+        {/* ── Récapitulatif après création ── */}
+        {success ? (
+          <div className="py-2 space-y-4">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+              <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
+                <Check className="h-4 w-4" /> Compte créé avec succès
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs">Nom</span>
+                  <span className="font-medium">{fullName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs">Email de connexion</span>
+                  <span className="font-mono text-xs text-primary">{email}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs">Mot de passe temporaire</span>
+                  <span className="font-mono text-xs bg-white border rounded px-2 py-0.5">{password}</span>
+                </div>
+              </div>
+            </div>
+            <Button className="w-full gap-2" variant="outline" onClick={copyCredentials}>
+              {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copié !" : "Copier les identifiants"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground text-center">
+              Transmets ces identifiants au chef. Il pourra changer son mot de passe à la première connexion.
+            </p>
+          </div>
+        ) : (
 
         <div className="space-y-4 py-2">
           {/* Nom complet */}
@@ -183,13 +215,24 @@ const CreateChefDialog = ({
           )}
         </div>
 
+        {/* Fermer le formulaire de saisie */}
+        )}
+
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Annuler
-          </Button>
-          <Button onClick={handleCreate} disabled={loading}>
-            {loading ? "Création…" : "Créer le compte"}
-          </Button>
+          {success ? (
+            <Button className="w-full" onClick={() => { onOpenChange(false); reset(); }}>
+              Fermer
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleCreate} disabled={loading}>
+                {loading ? "Création…" : "Créer le compte"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
