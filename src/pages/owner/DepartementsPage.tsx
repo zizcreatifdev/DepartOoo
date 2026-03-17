@@ -48,19 +48,39 @@ interface Departement {
 
 // ── Service ──────────────────────────────────────────────────
 async function fetchDepartements(): Promise<Departement[]> {
+  // 1. Récupérer tous les départements sans join
   const { data: depts, error } = await (supabase as any)
     .from("departments")
-    .select(`*, profiles!departments_chef_id_fkey (full_name, email)`)
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
+  if (!depts || depts.length === 0) return [];
 
+  // 2. Récupérer les profils des chefs en une seule requête
+  const chefIds = depts
+    .map((d: any) => d.chef_id)
+    .filter(Boolean);
+
+  const profilesMap: Record<string, { full_name: string; email: string }> = {};
+  if (chefIds.length > 0) {
+    const { data: profiles } = await (supabase as any)
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", chefIds);
+    (profiles ?? []).forEach((p: any) => {
+      profilesMap[p.id] = { full_name: p.full_name, email: p.email };
+    });
+  }
+
+  // 3. Enrichir avec comptages
   const enriched = await Promise.all(
-    (depts ?? []).map(async (d: any) => {
+    depts.map(async (d: any) => {
       const [{ count: nb_enseignants }, { count: nb_filieres }] = await Promise.all([
         supabase.from("enseignants").select("*", { count: "exact", head: true }).eq("department_id", d.id),
         (supabase as any).from("filieres").select("*", { count: "exact", head: true }).eq("department_id", d.id),
       ]);
+      const chef = d.chef_id ? profilesMap[d.chef_id] : null;
       return {
         id: d.id,
         name: d.name,
@@ -70,8 +90,8 @@ async function fetchDepartements(): Promise<Departement[]> {
         onboarding_completed: d.onboarding_completed ?? false,
         offre: d.offre ?? null,
         created_at: d.created_at,
-        chef_name: d.profiles?.full_name ?? null,
-        chef_email: d.profiles?.email ?? null,
+        chef_name: chef?.full_name ?? null,
+        chef_email: chef?.email ?? null,
         nb_enseignants: nb_enseignants ?? 0,
         nb_filieres: nb_filieres ?? 0,
       };
