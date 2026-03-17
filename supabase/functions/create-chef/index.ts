@@ -4,7 +4,7 @@
  * Crée un compte chef de département avec :
  *   - Email au format <username>@departo.app
  *   - Mot de passe défini par l'owner
- *   - is_first_login = true (le chef peut changer son MDP à la 1re connexion)
+ *   - is_first_login = true
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 
@@ -42,10 +42,11 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
+    // ── 2. Vérifier l'identité de l'appelant ─────────────
     const { data: { user: caller } } = await supabaseUser.auth.getUser();
     if (!caller) return jsonResponse({ error: "Non autorisé" }, 401);
 
-    // ── 2. Vérifier que l'appelant est owner ──────────────
+    // ── 3. Vérifier que l'appelant est owner ──────────────
     const { data: callerRoles } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 3. Lire le body ───────────────────────────────────
+    // ── 4. Lire le body ───────────────────────────────────
     const { username, full_name, department_id, password } = await req.json();
 
     if (!username || !full_name || !department_id || !password) {
@@ -69,7 +70,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validation username : lettres, chiffres, tirets, points seulement
     if (!/^[a-z0-9._-]+$/i.test(username)) {
       return jsonResponse(
         { error: "Username invalide (lettres, chiffres, . _ - uniquement)." },
@@ -83,10 +83,10 @@ Deno.serve(async (req) => {
 
     const email = `${username.toLowerCase()}@departo.app`;
 
-    // ── 4. Vérifier que le département existe ─────────────
+    // ── 5. Vérifier que le département existe et n'a pas déjà un chef ──
     const { data: dept, error: deptErr } = await supabaseAdmin
       .from("departments")
-      .select("id, name")
+      .select("id, name, chef_id")
       .eq("id", department_id)
       .single();
 
@@ -94,17 +94,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Département introuvable." }, 404);
     }
 
-    // ── 5. Vérifier qu'il n'y a pas déjà un chef ─────────
-    const { data: existingChef } = await supabaseAdmin
-      .from("user_roles")
-      .select("user_id, profiles!inner(department_id)")
-      .eq("role", "chef");
-
-    const alreadyHasChef = (existingChef ?? []).some(
-      (r: any) => r.profiles?.department_id === department_id,
-    );
-
-    if (alreadyHasChef) {
+    if (dept.chef_id) {
       return jsonResponse(
         { error: "Ce département a déjà un chef. Supprimez l'existant avant d'en créer un nouveau." },
         409,
@@ -116,12 +106,11 @@ Deno.serve(async (req) => {
       await supabaseAdmin.auth.admin.createUser({
         email,
         password,
-        email_confirm: true,   // pas besoin de vérification email
+        email_confirm: true,
         user_metadata: { full_name },
       });
 
     if (createErr) {
-      // Erreur "email already exists"
       if (createErr.message?.toLowerCase().includes("already")) {
         return jsonResponse(
           { error: `L'identifiant "${username}" est déjà utilisé. Choisissez-en un autre.` },
@@ -134,20 +123,29 @@ Deno.serve(async (req) => {
     const newUserId = newUserData.user.id;
 
     // ── 7. Rôle chef ──────────────────────────────────────
-    await supabaseAdmin.from("user_roles").insert({
-      user_id: newUserId,
-      role: "chef",
-    });
+    const { error: roleErr } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: newUserId, role: "chef" });
 
-    // ── 8. Profil : rattacher département + nom + first_login ──
-    await supabaseAdmin
+    if (roleErr) {
+      return jsonResponse({ error: `Erreur rôle : ${roleErr.message}` }, 500);
+    }
+
+    // ── 8. Profil : rattacher au département ──────────────
+    const { error: profileErr } = await supabaseAdmin
       .from("profiles")
-      .update({
-        department_id,
-        full_name,
-        is_first_login: true,
-      })
+      .update({ department_id, full_name, is_first_login: true })
       .eq("id", newUserId);
+
+    if (profileErr) {
+      return jsonResponse({ error: `Erreur profil : ${profileErr.message}` }, 500);
+    }
+
+    // ── 9. Mettre à jour departments.chef_id ─────────────
+    await supabaseAdmin
+      .from("departments")
+      .update({ chef_id: newUserId })
+      .eq("id", department_id);
 
     return jsonResponse({
       success: true,
@@ -155,6 +153,7 @@ Deno.serve(async (req) => {
       email,
       department_name: dept.name,
     });
+
   } catch (err: any) {
     return jsonResponse({ error: err.message ?? "Erreur serveur." }, 500);
   }
