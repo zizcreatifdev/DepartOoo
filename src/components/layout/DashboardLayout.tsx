@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   ClipboardList,
   ChevronRight,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,11 +81,12 @@ const menuByRole: Record<string, MenuItem[]> = {
     { title: "Mes heures", url: "/dashboard/enseignant/heures", icon: Settings },
   ],
   owner: [
-    { title: "Tableau de bord", url: "/dashboard/owner", icon: LayoutDashboard },
-    { title: "Universités",     url: "/dashboard/owner/universites", icon: GraduationCap },
-    { title: "Départements",   url: "/dashboard/owner/departements", icon: Building2 },
-    { title: "Utilisateurs",   url: "/dashboard/owner/utilisateurs", icon: Users },
-    { title: "Paramètres",     url: "/dashboard/owner/parametres",   icon: Settings },
+    { title: "Tableau de bord", url: "/dashboard/owner",              icon: LayoutDashboard },
+    { title: "Plans tarifaires",url: "/dashboard/owner/plans",        icon: CreditCard },
+    { title: "Universités",     url: "/dashboard/owner/universites",  icon: GraduationCap },
+    { title: "Départements",    url: "/dashboard/owner/departements", icon: Building2 },
+    { title: "Utilisateurs",    url: "/dashboard/owner/utilisateurs", icon: Users },
+    { title: "Paramètres",      url: "/dashboard/owner/parametres",   icon: Settings },
   ],
 };
 

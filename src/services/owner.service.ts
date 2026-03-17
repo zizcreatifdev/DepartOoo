@@ -324,7 +324,50 @@ export async function getAlertesOwner(): Promise<AlerteOwner[]> {
 }
 
 // ============================================================
-// 7. Évolution des inscriptions (départements par mois)
+// 7. Répartition réelle des offres (departments.offre)
+// ============================================================
+
+export interface OffreDistribution {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export async function getOffreDistribution(): Promise<OffreDistribution[]> {
+  const { data } = await (supabase as any)
+    .from('departments')
+    .select('offre')
+    .eq('onboarding_completed', true);
+
+  if (!data || data.length === 0) return [];
+
+  const counts: Record<string, number> = {};
+  (data as any[]).forEach((d) => {
+    const offre = d.offre ?? 'starter';
+    counts[offre] = (counts[offre] ?? 0) + 1;
+  });
+
+  const colorMap: Record<string, string> = {
+    starter:    'hsl(var(--chart-1))',
+    pro:        'hsl(var(--chart-2))',
+    universite: 'hsl(var(--chart-3))',
+  };
+
+  const labelMap: Record<string, string> = {
+    starter:    'Starter',
+    pro:        'Pro',
+    universite: 'Université',
+  };
+
+  return Object.entries(counts).map(([slug, value]) => ({
+    name:  labelMap[slug] ?? slug,
+    value,
+    color: colorMap[slug] ?? 'hsl(var(--chart-4))',
+  }));
+}
+
+// ============================================================
+// 8. Évolution des inscriptions (départements par mois)
 // ============================================================
 
 export async function getEvolutionInscriptions(): Promise<EvolutionInscription[]> {

@@ -6,8 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PipelineTable } from '@/components/owner/PipelineTable';
 import {
-  Users, Building2, AlertTriangle, CreditCard, ChevronRight,
-  BarChart3, Activity, CalendarClock, FileText, CalendarDays,
+  Users, Building2, AlertTriangle, ChevronRight,
+  BarChart3, Activity, FileText, CalendarDays,
   Zap, ShieldAlert, TrendingUp, LayoutGrid,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,24 +18,8 @@ import {
 import {
   getStatsGlobales, getDepartementsInactifs, getAdoptionParModule,
   getPipelineCommercial, getAlertesOwner, getEvolutionInscriptions,
+  getOffreDistribution,
 } from '@/services/owner.service';
-
-// ── Données financières — à connecter à un système de paiement ──
-const planDistribution = [
-  { name: 'Starter',     value: 18, color: 'hsl(var(--chart-1))' },
-  { name: 'Pro',         value: 42, color: 'hsl(var(--chart-2))' },
-  { name: 'Université',  value: 12, color: 'hsl(var(--chart-3))' },
-];
-const expiringLicenses = [
-  { dept: 'Info — Univ. Yaoundé I',      plan: 'Pro',         daysLeft: 12 },
-  { dept: 'Maths — Univ. Douala',        plan: 'Starter',     daysLeft: 28 },
-  { dept: 'Physique — Univ. Dschang',    plan: 'Pro',         daysLeft: 45 },
-  { dept: 'Chimie — Univ. Maroua',       plan: 'Université',  daysLeft: 72 },
-];
-const latePayments = [
-  { dept: 'Génie Civil — Univ. Ngaoundéré', amount: 150_000, daysPast: 15 },
-  { dept: 'SVT — Univ. Bamenda',             amount:  75_000, daysPast:  7 },
-];
 
 // ── Helpers ──
 function StatSkeleton() {
@@ -91,6 +75,12 @@ const OwnerDashboard = () => {
     staleTime: 300_000,
   });
 
+  const { data: offreDistrib = [] } = useQuery({
+    queryKey: ['owner-offre-distrib'],
+    queryFn:  getOffreDistribution,
+    staleTime: 60_000,
+  });
+
   // ---- Calculs pipeline ----
   const pipelineStats = {
     discussion: pipeline.filter(p => p.statut === 'discussion').length,
@@ -98,7 +88,7 @@ const OwnerDashboard = () => {
     essai:      pipeline.filter(p => p.statut === 'essai').length,
     converti:   pipeline.filter(p => p.statut === 'converti').length,
   };
-  const totalLicenses = planDistribution.reduce((s, p) => s + p.value, 0);
+  const totalLicenses = offreDistrib.reduce((s, p) => s + p.value, 0);
 
   return (
     <DashboardLayout title="Administration — Departo">
@@ -128,14 +118,6 @@ const OwnerDashboard = () => {
                   </Button>
                 </div>
               ))}
-              {/* Alertes financières statiques */}
-              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-background/80">
-                <CreditCard className="h-4 w-4 text-destructive" />
-                <span className="flex-1 text-sm text-foreground">
-                  {expiringLicenses.filter(l => l.daysLeft <= 30).length} licence(s) expirent dans moins de 30 jours
-                </span>
-                <Button variant="ghost" size="sm"><ChevronRight className="h-4 w-4" /></Button>
-              </div>
             </CardContent>
           </Card>
         )}
@@ -210,14 +192,13 @@ const OwnerDashboard = () => {
           </div>
         </div>
 
-        {/* ══════════ REVENUS (données statiques — à connecter) ══════════ */}
+        {/* ══════════ CROISSANCE ══════════ */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" /> Revenus
-            <Badge variant="outline" className="text-xs font-normal ml-1">Données de démo</Badge>
+            <TrendingUp className="h-5 w-5" /> Croissance
           </h3>
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* Évolution inscriptions (real data) */}
+            {/* Évolution inscriptions (données réelles) */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Évolution des inscriptions</CardTitle>
@@ -245,66 +226,35 @@ const OwnerDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Répartition par offre */}
+            {/* Répartition par offre — données réelles departments.offre */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Répartition par offre</CardTitle>
-                <CardDescription>Total : {totalLicenses} licences actives</CardDescription>
+                <CardDescription>
+                  {totalLicenses > 0
+                    ? `${totalLicenses} département${totalLicenses > 1 ? 's' : ''} actif${totalLicenses > 1 ? 's' : ''}`
+                    : 'Aucun département actif'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="h-64 flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={planDistribution} cx="50%" cy="50%"
-                      innerRadius={50} outerRadius={80} dataKey="value"
-                      label={({ name, value }) => `${name} (${value})`}
-                    >
-                      {planDistribution.map((entry, index) => (
-                        <Cell key={index} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Licences + Paiements */}
-          <div className="grid gap-4 lg:grid-cols-2 mt-4">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Licences expirant bientôt</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {expiringLicenses.map((l, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
-                    <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{l.dept}</p>
-                      <p className="text-xs text-muted-foreground">{l.plan}</p>
-                    </div>
-                    <Badge variant={l.daysLeft <= 30 ? 'destructive' : l.daysLeft <= 60 ? 'secondary' : 'outline'}>
-                      {l.daysLeft}j
-                    </Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Paiements en retard</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {latePayments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun paiement en retard.</p>
-                ) : latePayments.map((p, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5">
-                    <CreditCard className="h-4 w-4 text-destructive shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.dept}</p>
-                      <p className="text-xs text-destructive">
-                        {p.amount.toLocaleString('fr-FR')} FCFA · {p.daysPast} jours de retard
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                {offreDistrib.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune donnée disponible</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={offreDistrib} cx="50%" cy="50%"
+                        innerRadius={50} outerRadius={80} dataKey="value"
+                        label={({ name, value }) => `${name} (${value})`}
+                      >
+                        {offreDistrib.map((entry, index) => (
+                          <Cell key={index} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>

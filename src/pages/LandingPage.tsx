@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getActivePlans, Plan } from "@/services/plans.service";
 import {
   GraduationCap, CalendarDays, Users, ClipboardList, BookOpen,
   BarChart3, ArrowRight, CheckCircle2, Shield, Zap, FileText,
@@ -27,70 +29,19 @@ const roles = [
   { icon: BookOpen,     label: "Enseignant",           color: "bg-emerald-500/10 text-emerald-600", desc: "Emploi du temps, disponibilités, notes et sujets." },
 ];
 
-const plans = [
-  {
-    name: "Starter",
-    price: "Gratuit",
-    period: "· 1 mois d'essai",
-    desc: "Accès complet pendant 30 jours, sans carte bancaire",
-    badge: null,
-    highlight: false,
-    features: [
-      "1 assistant de département",
-      "30 enseignants maximum",
-      "Toutes les fonctionnalités incluses",
-      "Export PDF & Excel",
-      "Logo université sur les documents",
-      "Support par email",
-    ],
-    note: "Après 30 jours, les fonctionnalités se verrouillent jusqu'à souscription.",
-    cta: "Commencer gratuitement",
-    action: "login",
-  },
-  {
-    name: "Pro",
-    price: "Sur devis",
-    period: "",
-    desc: "Pour les départements qui veulent continuer après l'essai",
-    badge: "Populaire",
-    highlight: true,
-    features: [
-      "2 assistants de département",
-      "60 enseignants maximum",
-      "Toutes les fonctionnalités illimitées",
-      "Notifications WhatsApp",
-      "Renouvellement annuel ou mensuel",
-      "Support prioritaire",
-    ],
-    note: null,
-    cta: "Je suis intéressé",
-    action: "contact",
-  },
-  {
-    name: "Université",
-    price: "Sur devis",
-    period: "",
-    desc: "Pour les établissements multi-départements",
-    badge: null,
-    highlight: false,
-    features: [
-      "Assistants & enseignants illimités",
-      "Tous les départements de l'université",
-      "Dashboard centralisé",
-      "Accompagnement & formations",
-      "Intégration systèmes existants",
-      "Compte dédié",
-    ],
-    note: null,
-    cta: "Nous contacter",
-    action: "contact",
-  },
-];
+// Plans chargés depuis Supabase (voir PlansPage dans le dashboard owner)
 
 /* ── Composant ───────────────────────────────────────────── */
 
 const LandingPage = () => {
   const navigate = useNavigate();
+
+  // ── Plans depuis Supabase (mis à jour depuis le dashboard owner) ──
+  const { data: plans = [], isLoading: plansLoading } = useQuery<Plan[]>({
+    queryKey: ["landing-plans"],
+    queryFn: getActivePlans,
+    staleTime: 60_000,
+  });
 
   const handleAction = (action: string) => {
     if (action === "contact") {
@@ -247,57 +198,72 @@ const LandingPage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative rounded-2xl border p-7 flex flex-col transition-all ${
-                  plan.highlight
-                    ? "border-primary bg-primary/5 shadow-xl shadow-primary/10 ring-1 ring-primary/30 scale-[1.02]"
-                    : "border-border/60 bg-card hover:border-primary/30 hover:shadow-md"
-                }`}
-              >
-                {plan.badge && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <Badge className="px-4 py-0.5 text-xs shadow-sm">{plan.badge}</Badge>
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{plan.desc}</p>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-black">{plan.price}</span>
-                    {plan.period && (
-                      <span className="text-sm text-muted-foreground">{plan.period}</span>
-                    )}
+            {plansLoading ? (
+              // Squelette pendant le chargement
+              [0, 1, 2].map((i) => (
+                <div key={i} className="rounded-2xl border border-border/60 bg-card p-7 h-80 animate-pulse">
+                  <div className="h-5 bg-muted rounded w-24 mb-3" />
+                  <div className="h-8 bg-muted rounded w-32 mb-6" />
+                  <div className="space-y-2">
+                    {[0,1,2,3].map(j => <div key={j} className="h-3 bg-muted rounded w-full" />)}
                   </div>
                 </div>
-
-                <ul className="space-y-3 flex-1 mb-6">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {plan.note && (
-                  <p className="text-xs text-muted-foreground italic border-t pt-4 mb-5">
-                    {plan.note}
-                  </p>
-                )}
-
-                <Button
-                  className="w-full h-11"
-                  variant={plan.highlight ? "default" : "outline"}
-                  onClick={() => handleAction(plan.action)}
+              ))
+            ) : (
+              plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className={`relative rounded-2xl border p-7 flex flex-col transition-all ${
+                    plan.is_highlighted
+                      ? "border-primary bg-primary/5 shadow-xl shadow-primary/10 ring-1 ring-primary/30 scale-[1.02]"
+                      : "border-border/60 bg-card hover:border-primary/30 hover:shadow-md"
+                  }`}
                 >
-                  {plan.cta}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+                  {plan.badge && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                      <Badge className="px-4 py-0.5 text-xs shadow-sm">{plan.badge}</Badge>
+                    </div>
+                  )}
+
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
+                    {plan.description && (
+                      <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                    )}
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-black">{plan.price_label}</span>
+                      {plan.period_label && (
+                        <span className="text-sm text-muted-foreground">{plan.period_label}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <ul className="space-y-3 flex-1 mb-6">
+                    {plan.features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {plan.note && (
+                    <p className="text-xs text-muted-foreground italic border-t pt-4 mb-5">
+                      {plan.note}
+                    </p>
+                  )}
+
+                  <Button
+                    className="w-full h-11"
+                    variant={plan.is_highlighted ? "default" : "outline"}
+                    onClick={() => handleAction(plan.action)}
+                  >
+                    {plan.cta_label}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
