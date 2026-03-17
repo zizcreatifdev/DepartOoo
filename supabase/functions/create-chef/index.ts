@@ -1,7 +1,7 @@
 /**
  * create-chef/index.ts
  * Edge Function — réservée à l'owner.
- * Le chef est lié au département via profiles.department_id (pas de chef_id sur departments).
+ * Retourne toujours HTTP 200 avec { success } ou { error } dans le body.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 
@@ -11,9 +11,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-function jsonResponse(body: unknown, status = 200): Response {
+// Toujours 200 pour que le client lise res.data.error sans exception
+function ok(body: unknown): Response {
   return new Response(JSON.stringify(body), {
-    status,
+    status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
@@ -26,7 +27,7 @@ Deno.serve(async (req) => {
   try {
     // ── 1. Auth ───────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jsonResponse({ error: "Non autorisé" }, 401);
+    if (!authHeader) return ok({ error: "Non autorisé" });
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -40,7 +41,7 @@ Deno.serve(async (req) => {
     );
 
     const { data: { user: caller } } = await supabaseUser.auth.getUser();
-    if (!caller) return jsonResponse({ error: "Non autorisé" }, 401);
+    if (!caller) return ok({ error: "Non autorisé — utilisateur non trouvé" });
 
     // ── 2. Vérifier rôle owner ────────────────────────────
     const { data: callerRoles } = await supabaseAdmin
@@ -50,20 +51,20 @@ Deno.serve(async (req) => {
 
     const roles = (callerRoles ?? []).map((r: any) => r.role);
     if (!roles.includes("owner")) {
-      return jsonResponse({ error: "Accès refusé — seul l'owner peut créer un chef." }, 403);
+      return ok({ error: "Accès refusé — seul l'owner peut créer un chef." });
     }
 
     // ── 3. Lire le body ───────────────────────────────────
     const { username, full_name, department_id, password } = await req.json();
 
     if (!username || !full_name || !department_id || !password) {
-      return jsonResponse({ error: "Champs manquants : username, full_name, department_id, password." }, 400);
+      return ok({ error: "Champs manquants : username, full_name, department_id, password." });
     }
     if (!/^[a-z0-9._-]+$/i.test(username)) {
-      return jsonResponse({ error: "Username invalide (lettres, chiffres, . _ - uniquement)." }, 400);
+      return ok({ error: "Username invalide (lettres, chiffres, . _ - uniquement)." });
     }
     if (password.length < 8) {
-      return jsonResponse({ error: "Mot de passe trop court (8 caractères minimum)." }, 400);
+      return ok({ error: "Mot de passe trop court (8 caractères minimum)." });
     }
 
     const email = `${username.toLowerCase()}@departo.app`;
@@ -76,11 +77,10 @@ Deno.serve(async (req) => {
       .single();
 
     if (deptErr || !dept) {
-      return jsonResponse({ error: "Département introuvable." }, 404);
+      return ok({ error: `Département introuvable. (${deptErr?.message ?? "null"})` });
     }
 
     // ── 5. Vérifier qu'il n'y a pas déjà un chef ─────────
-    // Le chef est identifié par : profile.department_id = department_id ET role = 'chef'
     const { data: deptProfiles } = await supabaseAdmin
       .from("profiles")
       .select("id")
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
         .in("user_id", deptProfileIds);
 
       if ((existingChefs ?? []).length > 0) {
-        return jsonResponse({ error: "Ce département a déjà un chef." }, 409);
+        return ok({ error: "Ce département a déjà un chef." });
       }
     }
 
@@ -111,12 +111,9 @@ Deno.serve(async (req) => {
 
     if (createErr) {
       if (createErr.message?.toLowerCase().includes("already")) {
-        return jsonResponse(
-          { error: `L'identifiant "${username}" est déjà utilisé. Choisissez-en un autre.` },
-          409,
-        );
+        return ok({ error: `L'identifiant "${username}" est déjà utilisé. Choisissez-en un autre.` });
       }
-      return jsonResponse({ error: createErr.message }, 400);
+      return ok({ error: `Erreur création compte : ${createErr.message}` });
     }
 
     const newUserId = newUserData.user.id;
@@ -127,7 +124,7 @@ Deno.serve(async (req) => {
       .insert({ user_id: newUserId, role: "chef" });
 
     if (roleErr) {
-      return jsonResponse({ error: `Erreur rôle : ${roleErr.message}` }, 500);
+      return ok({ error: `Erreur rôle : ${roleErr.message}` });
     }
 
     // ── 8. Rattacher le profil au département ─────────────
@@ -137,10 +134,10 @@ Deno.serve(async (req) => {
       .eq("id", newUserId);
 
     if (profileErr) {
-      return jsonResponse({ error: `Erreur profil : ${profileErr.message}` }, 500);
+      return ok({ error: `Erreur profil : ${profileErr.message}` });
     }
 
-    return jsonResponse({
+    return ok({
       success: true,
       user_id: newUserId,
       email,
@@ -148,6 +145,6 @@ Deno.serve(async (req) => {
     });
 
   } catch (err: any) {
-    return jsonResponse({ error: err.message ?? "Erreur serveur." }, 500);
+    return ok({ error: `Exception : ${err.message ?? "Erreur serveur."}` });
   }
 });
