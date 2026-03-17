@@ -67,17 +67,33 @@ async function fetchDepartements(): Promise<Departement[]> {
   if (error) throw error;
   if (!depts || depts.length === 0) return [];
 
-  const chefIds = depts.map((d: any) => d.chef_id).filter(Boolean);
-  const profilesMap: Record<string, { full_name: string; email: string }> = {};
-  if (chefIds.length > 0) {
-    const { data: profiles } = await (supabase as any)
-      .from("profiles")
-      .select("id, full_name, email")
-      .in("id", chefIds);
-    (profiles ?? []).forEach((p: any) => {
-      profilesMap[p.id] = { full_name: p.full_name, email: p.email };
-    });
+  const deptIds = depts.map((d: any) => d.id);
+
+  // Chercher les chefs via profiles.department_id (pas de chef_id sur departments)
+  const { data: chefProfiles } = await (supabase as any)
+    .from("profiles")
+    .select("id, full_name, email, department_id")
+    .in("department_id", deptIds);
+
+  // Parmi ces profils, lesquels ont le rôle chef ?
+  const chefProfileIds = (chefProfiles ?? []).map((p: any) => p.id);
+  const chefRoleSet = new Set<string>();
+  if (chefProfileIds.length > 0) {
+    const { data: chefRoles } = await (supabase as any)
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "chef")
+      .in("user_id", chefProfileIds);
+    (chefRoles ?? []).forEach((r: any) => chefRoleSet.add(r.user_id));
   }
+
+  // Map department_id → chef profile
+  const chefByDept: Record<string, { full_name: string; email: string }> = {};
+  (chefProfiles ?? []).forEach((p: any) => {
+    if (chefRoleSet.has(p.id) && p.department_id) {
+      chefByDept[p.department_id] = { full_name: p.full_name, email: p.email };
+    }
+  });
 
   const enriched = await Promise.all(
     depts.map(async (d: any) => {
@@ -85,7 +101,7 @@ async function fetchDepartements(): Promise<Departement[]> {
         supabase.from("enseignants").select("*", { count: "exact", head: true }).eq("department_id", d.id),
         (supabase as any).from("filieres").select("*", { count: "exact", head: true }).eq("department_id", d.id),
       ]);
-      const chef = d.chef_id ? profilesMap[d.chef_id] : null;
+      const chef = chefByDept[d.id] ?? null;
       return {
         id: d.id,
         name: d.name,
