@@ -37,6 +37,7 @@ import DepartementsOwnerPage from "./pages/owner/DepartementsPage";
 import UtilisateursPage from "./pages/owner/UtilisateursPage";
 import ParametresOwnerPage from "./pages/owner/ParametresPage";
 import PlansPage from "./pages/owner/PlansPage";
+import LicencesPage from "./pages/owner/LicencesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -88,6 +89,7 @@ const App = () => (
             <Route path="/dashboard/enseignant/*" element={<ProtectedRoute allowedRoles={["enseignant"]}><EnseignantDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/owner" element={<ProtectedRoute allowedRoles={["owner"]}><OwnerDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/owner/plans"        element={<ProtectedRoute allowedRoles={["owner"]}><PlansPage /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/licences"     element={<ProtectedRoute allowedRoles={["owner"]}><LicencesPage /></ProtectedRoute>} />
             <Route path="/dashboard/owner/universites"  element={<ProtectedRoute allowedRoles={["owner"]}><UniversitesPage /></ProtectedRoute>} />
             <Route path="/dashboard/owner/departements" element={<ProtectedRoute allowedRoles={["owner"]}><DepartementsOwnerPage /></ProtectedRoute>} />
             <Route path="/dashboard/owner/utilisateurs" element={<ProtectedRoute allowedRoles={["owner"]}><UtilisateursPage /></ProtectedRoute>} />

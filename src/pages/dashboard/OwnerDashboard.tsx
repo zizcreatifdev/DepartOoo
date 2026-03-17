@@ -9,8 +9,10 @@ import {
   Users, Building2, AlertTriangle, ChevronRight,
   BarChart3, Activity, FileText, CalendarDays,
   Zap, ShieldAlert, TrendingUp, LayoutGrid,
+  CalendarClock, CreditCard, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
@@ -20,6 +22,9 @@ import {
   getPipelineCommercial, getAlertesOwner, getEvolutionInscriptions,
   getOffreDistribution,
 } from '@/services/owner.service';
+import { getLicencesExpirantBientot, getPaiementsEnRetard, marquerPaye } from '@/services/licences.service';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 // ── Helpers ──
 function StatSkeleton() {
@@ -79,6 +84,31 @@ const OwnerDashboard = () => {
     queryKey: ['owner-offre-distrib'],
     queryFn:  getOffreDistribution,
     staleTime: 60_000,
+  });
+
+  const { data: licencesExpirantes = [] } = useQuery({
+    queryKey: ['owner-dashboard-licences'],
+    queryFn:  () => getLicencesExpirantBientot(60),
+    staleTime: 60_000,
+  });
+
+  const { data: paiementsEnRetard = [] } = useQuery({
+    queryKey: ['owner-dashboard-paiements'],
+    queryFn:  getPaiementsEnRetard,
+    staleTime: 30_000,
+  });
+
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  const payerMutation = useMutation({
+    mutationFn: (id: string) => marquerPaye(id),
+    onSuccess: () => {
+      toast.success('Paiement marqué comme reçu ✓');
+      qc.invalidateQueries({ queryKey: ['owner-dashboard-paiements'] });
+      qc.invalidateQueries({ queryKey: ['owner-paiements'] });
+    },
+    onError: (e: any) => toast.error('Erreur : ' + e.message),
   });
 
   // ---- Calculs pipeline ----
@@ -255,6 +285,78 @@ const OwnerDashboard = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* ══════════ LICENCES & PAIEMENTS ══════════ */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <CalendarClock className="h-5 w-5" /> Licences & Paiements
+            <Button variant="ghost" size="sm" className="ml-auto text-xs" onClick={() => navigate('/dashboard/owner/licences')}>
+              Gérer →
+            </Button>
+          </h3>
+          <div className="grid gap-4 lg:grid-cols-2">
+
+            {/* Licences expirant bientôt */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Licences expirant bientôt</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {licencesExpirantes.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4" /> Toutes les licences sont valides
+                  </p>
+                ) : licencesExpirantes.map((l) => (
+                  <div key={l.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
+                    <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{l.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {l.university && `${l.university} · `}
+                        {l.offre.charAt(0).toUpperCase() + l.offre.slice(1)}
+                      </p>
+                    </div>
+                    <Badge variant={l.jours_restants !== null && l.jours_restants <= 14 ? 'destructive' : l.jours_restants !== null && l.jours_restants <= 30 ? 'secondary' : 'outline'}>
+                      {l.jours_restants !== null ? `${l.jours_restants}j` : '—'}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Paiements en retard */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Paiements en retard</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {paiementsEnRetard.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4" /> Aucun paiement en retard
+                  </p>
+                ) : paiementsEnRetard.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5">
+                    <CreditCard className="h-4 w-4 text-destructive shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.department_name}</p>
+                      <p className="text-xs text-destructive">
+                        {p.montant.toLocaleString('fr-FR')} FCFA · échéance {new Date(p.date_echeance).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="text-xs text-emerald-600 hover:text-emerald-700 shrink-0"
+                      disabled={payerMutation.isPending}
+                      onClick={() => payerMutation.mutate(p.id)}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Payé
+                    </Button>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
