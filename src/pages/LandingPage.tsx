@@ -1,79 +1,40 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  GraduationCap,
-  CalendarDays,
-  Users,
-  ClipboardList,
-  BookOpen,
-  BarChart3,
-  ArrowRight,
-  CheckCircle2,
-  Shield,
-  Zap,
-  FileText,
-  Bell,
-  Building2,
-  Mail,
+  GraduationCap, CalendarDays, Users, ClipboardList, BookOpen,
+  BarChart3, ArrowRight, CheckCircle2, Shield, Zap, FileText,
+  Bell, Building2, Mail, Star, ChevronDown,
 } from "lucide-react";
 
+/* ── Données ─────────────────────────────────────────────── */
+
 const features = [
-  {
-    icon: CalendarDays,
-    title: "Emploi du temps intelligent",
-    description: "Planifiez les séances avec détection automatique des conflits de salles et d'enseignants.",
-  },
-  {
-    icon: Users,
-    title: "Gestion des enseignants",
-    description: "Suivi des disponibilités, quotas horaires, heures complémentaires et invitations par email.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Présences & Absences",
-    description: "Feuilles de présence numériques, alertes de dépassement de seuil et historique complet.",
-  },
-  {
-    icon: BookOpen,
-    title: "Notes & Résultats",
-    description: "Import Excel, calcul des moyennes pondérées et export des relevés de notes en PDF.",
-  },
-  {
-    icon: GraduationCap,
-    title: "Examens",
-    description: "Planification, affectation des salles et surveillants, suivi du dépôt des sujets.",
-  },
-  {
-    icon: BarChart3,
-    title: "Référentiel & Maquettes",
-    description: "Gestion des UE, coefficients, crédits ECTS et validation des maquettes pédagogiques.",
-  },
-  {
-    icon: FileText,
-    title: "Documents PDF automatisés",
-    description: "Emplois du temps, listes de présence et relevés générés avec le logo de votre université.",
-  },
-  {
-    icon: Bell,
-    title: "Alertes en temps réel",
-    description: "Notifications automatiques pour les absences critiques, perturbations et documents obsolètes.",
-  },
-  {
-    icon: Building2,
-    title: "Multi-universités",
-    description: "Chaque département est lié à son université avec son logo officiel sur tous les documents.",
-  },
+  { icon: CalendarDays, title: "Emploi du temps intelligent",   desc: "Détection automatique des conflits de salles et d'enseignants." },
+  { icon: Users,        title: "Gestion des enseignants",        desc: "Disponibilités, quotas horaires et invitations par email." },
+  { icon: ClipboardList,title: "Présences & Absences",           desc: "Alertes de dépassement de seuil et historique complet." },
+  { icon: BookOpen,     title: "Notes & Résultats",              desc: "Import Excel, moyennes pondérées, export PDF." },
+  { icon: GraduationCap,title: "Examens",                        desc: "Planification, salles, surveillants et sujets." },
+  { icon: BarChart3,    title: "Référentiel & Maquettes",        desc: "UE, coefficients, crédits ECTS et validation." },
+  { icon: FileText,     title: "Documents PDF automatisés",      desc: "Emplois du temps et relevés avec le logo de votre université." },
+  { icon: Bell,         title: "Alertes en temps réel",          desc: "Absences critiques, perturbations, documents obsolètes." },
+  { icon: Building2,    title: "Multi-universités",              desc: "Logo officiel de chaque université sur tous les documents." },
+];
+
+const roles = [
+  { icon: Shield,       label: "Chef de département", color: "bg-blue-500/10 text-blue-600",   desc: "Vision globale, validation des maquettes, gestion complète." },
+  { icon: ClipboardList,label: "Assistant",            color: "bg-violet-500/10 text-violet-600", desc: "Emplois du temps, présences, invitations enseignants." },
+  { icon: BookOpen,     label: "Enseignant",           color: "bg-emerald-500/10 text-emerald-600", desc: "Emploi du temps, disponibilités, notes et sujets." },
 ];
 
 const plans = [
   {
     name: "Starter",
     price: "Gratuit",
-    period: "1 mois d'essai",
-    description: "Accès complet pendant 30 jours, sans carte bancaire",
+    period: "· 1 mois d'essai",
+    desc: "Accès complet pendant 30 jours, sans carte bancaire",
     badge: null,
+    highlight: false,
     features: [
       "1 assistant de département",
       "30 enseignants maximum",
@@ -82,17 +43,17 @@ const plans = [
       "Logo université sur les documents",
       "Support par email",
     ],
-    cta: "Commencer l'essai gratuit",
-    ctaAction: "login",
-    highlight: false,
     note: "Après 30 jours, les fonctionnalités se verrouillent jusqu'à souscription.",
+    cta: "Commencer gratuitement",
+    action: "login",
   },
   {
     name: "Pro",
     price: "Sur devis",
     period: "",
-    description: "Pour les départements qui veulent continuer après l'essai",
+    desc: "Pour les départements qui veulent continuer après l'essai",
     badge: "Populaire",
+    highlight: true,
     features: [
       "2 assistants de département",
       "60 enseignants maximum",
@@ -101,17 +62,17 @@ const plans = [
       "Renouvellement annuel ou mensuel",
       "Support prioritaire",
     ],
-    cta: "Je suis intéressé",
-    ctaAction: "interest",
-    highlight: true,
     note: null,
+    cta: "Je suis intéressé",
+    action: "contact",
   },
   {
     name: "Université",
     price: "Sur devis",
     period: "",
-    description: "Pour les établissements multi-départements",
+    desc: "Pour les établissements multi-départements",
     badge: null,
+    highlight: false,
     features: [
       "Assistants & enseignants illimités",
       "Tous les départements de l'université",
@@ -120,198 +81,201 @@ const plans = [
       "Intégration systèmes existants",
       "Compte dédié",
     ],
-    cta: "Nous contacter",
-    ctaAction: "contact",
-    highlight: false,
     note: null,
+    cta: "Nous contacter",
+    action: "contact",
   },
 ];
 
-const benefits = [
-  "Réduction de 80% du temps de planification",
-  "Zéro conflit de salles et d'enseignants",
-  "Suivi en temps réel de l'avancement pédagogique",
-  "Documents PDF officiels générés automatiquement",
-];
+/* ── Composant ───────────────────────────────────────────── */
 
 const LandingPage = () => {
   const navigate = useNavigate();
 
-  return (
-    <div className="min-h-screen bg-background text-foreground">
+  const handleAction = (action: string) => {
+    if (action === "contact") {
+      window.location.href = "mailto:contact@departo.app";
+    } else {
+      navigate("/login");
+    }
+  };
 
-      {/* ── Header ── */}
-      <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto flex items-center justify-between h-16 px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+  return (
+    <div className="min-h-screen bg-background text-foreground antialiased">
+
+      {/* ── HEADER ─────────────────────────────────────────── */}
+      <header className="fixed top-0 inset-x-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-md">
+        <div className="container mx-auto flex items-center justify-between h-16 px-4 max-w-6xl">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <GraduationCap className="h-4.5 w-4.5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">Departo</span>
+            <span className="text-lg font-bold tracking-tight">Departo</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => navigate("/login")}>
-              Connexion
-            </Button>
-            <Button onClick={() => navigate("/login")}>
-              Commencer
-              <ArrowRight className="ml-1 h-4 w-4" />
+          <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
+            <a href="#features" className="hover:text-foreground transition-colors">Fonctionnalités</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">Tarifs</a>
+            <a href="mailto:contact@departo.app" className="hover:text-foreground transition-colors">Contact</a>
+          </nav>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>Connexion</Button>
+            <Button size="sm" onClick={() => navigate("/login")}>
+              Démarrer <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="container mx-auto px-4 py-20 md:py-32 text-center max-w-4xl">
-        <div className="inline-flex items-center gap-2 rounded-full border bg-muted/50 px-4 py-1.5 text-sm text-muted-foreground mb-6">
-          <Zap className="h-3.5 w-3.5 text-primary" />
-          Conçu pour les universités africaines
-        </div>
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-6">
-          La gestion de votre{" "}
-          <span className="text-primary">département universitaire</span>{" "}
-          enfin simple
-        </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-          Emploi du temps, enseignants, examens, notes et présences — tout centralisé
-          dans un seul outil pensé pour les chefs de département sénégalais.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button size="lg" onClick={() => navigate("/login")} className="text-base px-8">
-            Démarrer gratuitement
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
-          >
-            Découvrir les fonctionnalités
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-4">
-          Aucune carte bancaire requise · Starter gratuit pour toujours
-        </p>
-      </section>
+      {/* ── HERO ───────────────────────────────────────────── */}
+      <section className="relative overflow-hidden pt-32 pb-24 md:pt-44 md:pb-32">
+        {/* Gradient background */}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-br from-primary/5 via-background to-background" />
+        <div className="absolute -top-40 -right-40 -z-10 h-[500px] w-[500px] rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 -z-10 h-[300px] w-[300px] rounded-full bg-primary/8 blur-2xl" />
 
-      {/* ── Benefits strip ── */}
-      <section className="border-y bg-muted/30">
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {benefits.map((b) => (
-              <div key={b} className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <span className="text-sm font-medium">{b}</span>
+        <div className="container mx-auto px-4 max-w-5xl text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary mb-8">
+            <Zap className="h-3.5 w-3.5" />
+            Conçu pour les universités d'Afrique de l'Ouest
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-[1.05] mb-6">
+            Gérez votre{" "}
+            <span className="relative inline-block">
+              <span className="relative z-10 text-primary">département</span>
+              <span className="absolute inset-x-0 bottom-1 h-3 bg-primary/15 -z-0 rounded" />
+            </span>
+            <br />
+            sans effort
+          </h1>
+
+          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+            Emploi du temps, enseignants, examens, notes, présences —
+            <strong className="text-foreground font-medium"> tout en un seul endroit</strong>.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-16">
+            <Button size="lg" className="text-base px-8 h-12 shadow-lg shadow-primary/25" onClick={() => navigate("/login")}>
+              Essayer gratuitement — 30 jours
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+            <Button size="lg" variant="outline" className="h-12" onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}>
+              Voir les fonctionnalités
+              <ChevronDown className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Stat chips */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
+            {[
+              { icon: Star,          text: "Aucune carte bancaire" },
+              { icon: Zap,           text: "Mise en place en 10 min" },
+              { icon: Shield,        text: "Données hébergées en sécurité" },
+              { icon: Building2,     text: "7 universités sénégalaises incluses" },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5 text-primary" />
+                <span>{text}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Features ── */}
-      <section id="features" className="container mx-auto px-4 py-20 md:py-28">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Tout ce dont vous avez besoin
-          </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Une suite complète d'outils conçus spécifiquement pour les départements universitaires africains.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((f) => (
-            <Card key={f.title} className="group hover:shadow-md transition-shadow border-border/60">
-              <CardContent className="pt-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
-                  <f.icon className="h-5 w-5 text-primary" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Roles ── */}
-      <section className="bg-muted/30 border-y">
-        <div className="container mx-auto px-4 py-20 md:py-28">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Un espace pour chaque rôle
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              Chaque utilisateur accède à un tableau de bord adapté à ses responsabilités.
+      {/* ── FEATURES ───────────────────────────────────────── */}
+      <section id="features" className="py-24 md:py-32">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="text-center mb-16">
+            <p className="text-sm font-semibold text-primary uppercase tracking-widest mb-3">Fonctionnalités</p>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4">Tout ce dont vous avez besoin</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+              Une suite complète d'outils pensés pour la réalité des universités africaines.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {[
-              {
-                role: "Chef de département",
-                desc: "Vision globale, validation des maquettes, gestion de l'équipe et accès complet à tous les modules.",
-                icon: Shield,
-              },
-              {
-                role: "Assistant",
-                desc: "Saisie des emplois du temps, gestion des présences, invitations enseignants et support opérationnel.",
-                icon: ClipboardList,
-              },
-              {
-                role: "Enseignant",
-                desc: "Consultation de l'emploi du temps, saisie des disponibilités, notes et dépôt de sujets.",
-                icon: BookOpen,
-              },
-            ].map((r) => (
-              <Card key={r.role} className="text-center">
-                <CardContent className="pt-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mx-auto mb-4">
-                    <r.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <h3 className="font-semibold mb-2">{r.role}</h3>
-                  <p className="text-sm text-muted-foreground">{r.desc}</p>
-                </CardContent>
-              </Card>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {features.map((f, i) => (
+              <div
+                key={f.title}
+                className="group relative rounded-2xl border border-border/60 bg-card p-6 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
+                  <f.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-base mb-1.5">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+                {i === 0 && (
+                  <span className="absolute top-4 right-4 text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">Populaire</span>
+                )}
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Pricing ── */}
-      <section id="pricing" className="container mx-auto px-4 py-20 md:py-28">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Tarifs simples et transparents
-          </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Commencez gratuitement. Passez au plan supérieur quand votre département grandit.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              className={`relative flex flex-col ${plan.highlight ? "border-primary shadow-lg ring-1 ring-primary/30" : "border-border/60"}`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="px-3 py-0.5 text-xs">{plan.badge}</Badge>
+      {/* ── ROLES ──────────────────────────────────────────── */}
+      <section className="py-20 bg-muted/30 border-y">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <div className="text-center mb-12">
+            <p className="text-sm font-semibold text-primary uppercase tracking-widest mb-3">Rôles</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">Un espace pour chaque rôle</h2>
+            <p className="text-muted-foreground">Chaque utilisateur accède à un dashboard taillé pour ses responsabilités.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {roles.map((r) => (
+              <div key={r.label} className="rounded-2xl border bg-card p-6 text-center hover:shadow-md transition-shadow">
+                <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl ${r.color} mb-4`}>
+                  <r.icon className="h-6 w-6" />
                 </div>
-              )}
-              <CardContent className="pt-8 flex flex-col flex-1">
+                <h3 className="font-bold text-base mb-2">{r.label}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{r.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRICING ────────────────────────────────────────── */}
+      <section id="pricing" className="py-24 md:py-32">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <div className="text-center mb-16">
+            <p className="text-sm font-semibold text-primary uppercase tracking-widest mb-3">Tarifs</p>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4">Simple et transparent</h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              Commencez gratuitement. Continuez quand vous êtes convaincus.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            {plans.map((plan) => (
+              <div
+                key={plan.name}
+                className={`relative rounded-2xl border p-7 flex flex-col transition-all ${
+                  plan.highlight
+                    ? "border-primary bg-primary/5 shadow-xl shadow-primary/10 ring-1 ring-primary/30 scale-[1.02]"
+                    : "border-border/60 bg-card hover:border-primary/30 hover:shadow-md"
+                }`}
+              >
+                {plan.badge && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <Badge className="px-4 py-0.5 text-xs shadow-sm">{plan.badge}</Badge>
+                  </div>
+                )}
+
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                  <div className="flex items-end gap-1">
-                    <span className="text-3xl font-extrabold">{plan.price}</span>
+                  <p className="text-sm text-muted-foreground mb-4">{plan.desc}</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-black">{plan.price}</span>
                     {plan.period && (
-                      <span className="text-sm text-muted-foreground mb-1 ml-1">{plan.period}</span>
+                      <span className="text-sm text-muted-foreground">{plan.period}</span>
                     )}
                   </div>
                 </div>
 
-                <ul className="space-y-2.5 flex-1 mb-6">
+                <ul className="space-y-3 flex-1 mb-6">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
+                    <li key={f} className="flex items-start gap-2.5 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                       <span>{f}</span>
                     </li>
@@ -319,38 +283,33 @@ const LandingPage = () => {
                 </ul>
 
                 {plan.note && (
-                  <p className="text-xs text-muted-foreground italic mb-4 border-t pt-3">
+                  <p className="text-xs text-muted-foreground italic border-t pt-4 mb-5">
                     {plan.note}
                   </p>
                 )}
 
                 <Button
-                  className="w-full"
+                  className="w-full h-11"
                   variant={plan.highlight ? "default" : "outline"}
-                  onClick={() => {
-                    if (plan.ctaAction === "contact" || plan.ctaAction === "interest") {
-                      window.location.href = "mailto:contact@departo.app";
-                    } else {
-                      navigate("/login");
-                    }
-                  }}
+                  onClick={() => handleAction(plan.action)}
                 >
                   {plan.cta}
-                  {plan.name !== "Université" && <ArrowRight className="ml-2 h-4 w-4" />}
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── CTA final ── */}
-      <section className="bg-primary text-primary-foreground">
-        <div className="container mx-auto px-4 py-20 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Prêt à moderniser votre département ?
+      {/* ── CTA FINAL ──────────────────────────────────────── */}
+      <section className="relative overflow-hidden bg-primary text-primary-foreground">
+        <div className="absolute inset-0 -z-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.1),_transparent_60%)]" />
+        <div className="relative container mx-auto px-4 max-w-4xl py-24 text-center">
+          <h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
+            Prêt à moderniser<br />votre département ?
           </h2>
-          <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
+          <p className="text-primary-foreground/75 text-lg mb-10 max-w-lg mx-auto">
             Rejoignez les premiers départements qui ont adopté Departo.
             Configuration en moins de 10 minutes.
           </p>
@@ -358,8 +317,8 @@ const LandingPage = () => {
             <Button
               size="lg"
               variant="secondary"
+              className="h-12 px-10 text-base font-semibold"
               onClick={() => navigate("/login")}
-              className="text-base px-10"
             >
               Créer mon compte gratuitement
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -367,29 +326,29 @@ const LandingPage = () => {
             <Button
               size="lg"
               variant="ghost"
-              className="text-primary-foreground hover:text-primary-foreground hover:bg-white/10"
+              className="h-12 text-primary-foreground hover:text-primary-foreground hover:bg-white/10"
               onClick={() => { window.location.href = "mailto:contact@departo.app"; }}
             >
               <Mail className="mr-2 h-4 w-4" />
-              Nous contacter
+              Nous écrire
             </Button>
           </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
+      {/* ── FOOTER ─────────────────────────────────────────── */}
       <footer className="border-t bg-card">
-        <div className="container mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 max-w-6xl py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-4 w-4 text-primary" />
             <span className="font-semibold text-foreground">Departo</span>
             <span>— Gestion académique pour l'Afrique</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <a href="mailto:contact@departo.app" className="hover:text-foreground transition-colors">
               contact@departo.app
             </a>
-            <span>©&nbsp;{new Date().getFullYear()} Departo</span>
+            <span>© {new Date().getFullYear()} Departo</span>
           </div>
         </div>
       </footer>
