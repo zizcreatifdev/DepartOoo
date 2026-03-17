@@ -33,6 +33,9 @@ import NotesPage from "./pages/notes/NotesPage";
 import DocumentsPage from "./pages/documents/DocumentsPage";
 import EquipePage from "./pages/equipe/EquipePage";
 import UniversitesPage from "./pages/owner/UniversitesPage";
+import DepartementsOwnerPage from "./pages/owner/DepartementsPage";
+import UtilisateursPage from "./pages/owner/UtilisateursPage";
+import ParametresOwnerPage from "./pages/owner/ParametresPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -83,7 +86,10 @@ const App = () => (
             <Route path="/dashboard/enseignant/heures" element={<ProtectedRoute allowedRoles={["enseignant"]}><EnseignantHeuresPage /></ProtectedRoute>} />
             <Route path="/dashboard/enseignant/*" element={<ProtectedRoute allowedRoles={["enseignant"]}><EnseignantDashboard /></ProtectedRoute>} />
             <Route path="/dashboard/owner" element={<ProtectedRoute allowedRoles={["owner"]}><OwnerDashboard /></ProtectedRoute>} />
-            <Route path="/dashboard/owner/universites" element={<ProtectedRoute allowedRoles={["owner"]}><UniversitesPage /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/universites"  element={<ProtectedRoute allowedRoles={["owner"]}><UniversitesPage /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/departements" element={<ProtectedRoute allowedRoles={["owner"]}><DepartementsOwnerPage /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/utilisateurs" element={<ProtectedRoute allowedRoles={["owner"]}><UtilisateursPage /></ProtectedRoute>} />
+            <Route path="/dashboard/owner/parametres"   element={<ProtectedRoute allowedRoles={["owner"]}><ParametresOwnerPage /></ProtectedRoute>} />
             <Route path="/dashboard/owner/*" element={<ProtectedRoute allowedRoles={["owner"]}><OwnerDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
