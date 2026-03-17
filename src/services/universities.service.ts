@@ -125,6 +125,26 @@ export async function updateUniversity(
   return updated as University;
 }
 
+// ── deleteUniversity ───────────────────────────────────────────
+export async function deleteUniversity(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("universities" as any)
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+  clearCache();
+}
+
+// ── countDepartments ───────────────────────────────────────────
+export async function countDepartmentsForUniversity(id: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("departments" as any)
+    .select("*", { count: "exact", head: true })
+    .eq("university_id", id);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // ── uploadLogo ─────────────────────────────────────────────────
 export async function uploadLogo(
   university_id: string,

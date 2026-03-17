@@ -36,6 +36,7 @@ interface Departement {
   name: string;
   university: string | null;
   university_id: string | null;
+  ufr: string | null;
   onboarding_completed: boolean;
   offre: string | null;
   created_at: string;
@@ -50,7 +51,7 @@ async function fetchDepartements(): Promise<Departement[]> {
   const { data: depts, error } = await (supabase as any)
     .from("departments")
     .select(`
-      id, name, university, university_id, onboarding_completed, offre, created_at,
+      id, name, university, university_id, ufr, onboarding_completed, offre, created_at,
       profiles!departments_chef_id_fkey (full_name, email)
     `)
     .order("created_at", { ascending: false });
@@ -68,6 +69,7 @@ async function fetchDepartements(): Promise<Departement[]> {
         name: d.name,
         university: d.university ?? null,
         university_id: d.university_id ?? null,
+        ufr: d.ufr ?? null,
         onboarding_completed: d.onboarding_completed ?? false,
         offre: d.offre ?? null,
         created_at: d.created_at,
@@ -104,9 +106,9 @@ interface NouveauDeptDialogProps {
 }
 
 function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogProps) {
-  const [deptName, setDeptName]     = useState("");
-  const [ufr,      setUfr]          = useState("");
   const [univId,   setUnivId]       = useState("");
+  const [ufr,      setUfr]          = useState("");
+  const [deptName, setDeptName]     = useState("");
   const [offre,    setOffre]        = useState<"starter"|"pro"|"universite">("starter");
   const [saving,   setSaving]       = useState(false);
   const [error,    setError]        = useState<string | null>(null);
@@ -118,7 +120,7 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
   });
 
   function reset() {
-    setDeptName(""); setUfr(""); setUnivId(""); setOffre("starter"); setError(null);
+    setUnivId(""); setUfr(""); setDeptName(""); setOffre("starter"); setError(null);
   }
 
   function close() { onOpenChange(false); reset(); }
@@ -137,6 +139,7 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
           name:                 deptName.trim(),
           university_id:        univId,
           university:           univ?.name ?? "",
+          ufr:                  ufr.trim() || null,
           offre,
           onboarding_completed: false,
         });
@@ -179,11 +182,22 @@ function NouveauDeptDialog({ open, onOpenChange, onCreated }: NouveauDeptDialogP
             </Select>
           </div>
 
-          {/* Nom UFR / Département */}
+          {/* UFR */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Nom du département / UFR *</Label>
+            <Label className="text-xs">UFR (Unité de Formation et de Recherche)</Label>
             <Input
-              placeholder="ex: Département Informatique, UFR Sciences…"
+              placeholder="ex: UFR Sciences et Technologies, UFR Lettres…"
+              value={ufr}
+              onChange={(e) => setUfr(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">Optionnel — niveau intermédiaire entre l'université et le département</p>
+          </div>
+
+          {/* Département */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nom du département *</Label>
+            <Input
+              placeholder="ex: Département Informatique, Département Mathématiques…"
               value={deptName}
               onChange={(e) => setDeptName(e.target.value)}
             />
@@ -380,7 +394,9 @@ const DepartementsPage = () => {
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         {d.university && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <GraduationCap className="h-3 w-3" /> {d.university}
+                            <GraduationCap className="h-3 w-3" />
+                            {d.university}
+                            {d.ufr && <span className="text-muted-foreground/60">› {d.ufr}</span>}
                           </span>
                         )}
                         {d.chef_name ? (

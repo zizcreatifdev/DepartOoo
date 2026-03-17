@@ -11,6 +11,8 @@ import {
   updateUniversity,
   uploadLogo,
   createUniversity,
+  deleteUniversity,
+  countDepartmentsForUniversity,
 } from "@/services/universities.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +26,13 @@ import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from "@/components/ui/table";
 import {
-  Building2, Plus, Upload, CheckCircle2, AlertCircle, Globe, ImageIcon,
+  Building2, Plus, Upload, CheckCircle2, AlertCircle, Globe, ImageIcon, Trash2,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -75,6 +82,11 @@ const UniversitesPage = () => {
   const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
   const [editSaving, setEditSaving]       = useState(false);
   const editFileRef                       = useRef<HTMLInputElement>(null);
+
+  // ── Suppression ───────────────────────────────────────────
+  const [deleteUniv, setDeleteUniv]       = useState<University | null>(null);
+  const [deleteNbDepts, setDeleteNbDepts] = useState(0);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ── Fetch ─────────────────────────────────────────────────
 
@@ -219,6 +231,27 @@ const UniversitesPage = () => {
       toast.error(err.message);
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const openDelete = async (u: University) => {
+    const nb = await countDepartmentsForUniversity(u.id);
+    setDeleteNbDepts(nb);
+    setDeleteUniv(u);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteUniv) return;
+    setDeleteLoading(true);
+    try {
+      await deleteUniversity(deleteUniv.id);
+      toast.success(`Université "${deleteUniv.name}" supprimée.`);
+      setDeleteUniv(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message ?? "Erreur lors de la suppression.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -394,6 +427,14 @@ const UniversitesPage = () => {
                         onClick={() => openEdit(u)}
                       >
                         Modifier
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => openDelete(u)}
+                      >
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>
@@ -577,6 +618,41 @@ const UniversitesPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ════ DIALOGUE SUPPRIMER ════ */}
+      <AlertDialog open={!!deleteUniv} onOpenChange={(o) => { if (!o) setDeleteUniv(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer l'université ?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Tu vas supprimer <strong>{deleteUniv?.name}</strong>.
+              </span>
+              {deleteNbDepts > 0 ? (
+                <span className="block text-destructive font-medium">
+                  ⚠️ Cette université a {deleteNbDepts} département{deleteNbDepts > 1 ? "s" : ""} lié{deleteNbDepts > 1 ? "s" : ""}.
+                  La suppression est bloquée — retire d'abord les départements.
+                </span>
+              ) : (
+                <span className="block text-muted-foreground">
+                  Aucun département lié. Cette action est irréversible.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            {deleteNbDepts === 0 && (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? "Suppression…" : "Supprimer"}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
