@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
@@ -7,7 +7,8 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, role, department, loading } = useAuth();
+  const { user, role, profile, department, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -21,9 +22,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/login" replace />;
   }
 
-  // Chef with incomplete onboarding → force onboarding
-  if (role === "chef" && department && !department.onboarding_completed) {
+  // Chef sans département → onboarding (seulement si pas déjà sur /onboarding)
+  if (
+    role === "chef" &&
+    !profile?.department_id &&
+    location.pathname !== "/onboarding"
+  ) {
     return <Navigate to="/onboarding" replace />;
+  }
+
+  // Chef avec département (créé par owner ou onboarding terminé) → dashboard
+  if (role === "chef" && profile?.department_id && location.pathname === "/onboarding") {
+    return <Navigate to="/dashboard/chef" replace />;
   }
 
   // Check allowed roles
